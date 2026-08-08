@@ -32,7 +32,9 @@ export function LoginPage() {
   return (
     <main style={{ maxWidth: 400, margin: '0 auto', padding: '12vh 20px' }}>
       <div style={{ textAlign: 'center', marginBottom: 22 }}>
-        <Link to="/" style={{ textDecoration: 'none', fontSize: '1.9rem' }} aria-label="GreenRoom home">🟢</Link>
+        <Link to="/" style={{ textDecoration: 'none', display: 'inline-block' }} aria-label="GreenRoom home">
+          <span className="brand-dot" style={{ width: 16, height: 16 }} />
+        </Link>
         <h1 style={{ marginTop: 6 }}>{mode === 'login' ? 'Organizer sign in' : 'Create organizer account'}</h1>
       </div>
       <Card>

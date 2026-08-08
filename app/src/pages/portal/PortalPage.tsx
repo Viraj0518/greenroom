@@ -86,7 +86,7 @@ export function PortalPage() {
       <header className="row" style={{ marginBottom: 16, gap: 14 }}>
         <Avatar name={me.speaker.name} src={headshot ? assetUrl(headshot.id) : null} size={52} />
         <div className="grow">
-          <h1>Hi, {me.speaker.name.split(' ')[0]} 👋</h1>
+          <h1>Hi, {me.speaker.name.split(' ')[0]}</h1>
           <p className="muted small">{me.event.name} · {fmtDate(me.event.starts_on)}–{fmtDate(me.event.ends_on, { month: 'short', day: 'numeric', year: 'numeric' })}</p>
         </div>
       </header>
@@ -145,7 +145,7 @@ export function PortalPage() {
                       </div>
                       {s.slot && (
                         <div className="row-wrap small muted" style={{ marginTop: 4 }}>
-                          <span>🗓 {fmtDateTime(s.slot.starts_at)}{s.slot.room ? ` · ${s.slot.room}` : ''}</span>
+                          <span>{fmtDateTime(s.slot.starts_at)}{s.slot.room ? ` · ${s.slot.room}` : ''}</span>
                           {s.gcal_link && <a className="btn btn-sm" href={s.gcal_link} target="_blank" rel="noreferrer">Google Calendar</a>}
                           {s.outlook_link && <a className="btn btn-sm" href={s.outlook_link} target="_blank" rel="noreferrer">Outlook</a>}
                         </div>
@@ -263,7 +263,7 @@ function CalendarLinks({ speakerId, eventName, icsPath }: { speakerId: string; e
   const outlook = `https://outlook.live.com/calendar/0/addfromweb?url=${encodeURIComponent(webcal)}&name=${encodeURIComponent(`${eventName} — my talks`)}`
   return (
     <div className="row-wrap small" style={{ marginTop: 12 }}>
-      <span className="muted">📆 Your talks, on your calendar:</span>
+      <span className="muted">Your talks, on your calendar:</span>
       <a className="btn btn-sm" href={path} download>.ics file</a>
       <a className="btn btn-sm" href={google} target="_blank" rel="noreferrer">Google Calendar</a>
       <a className="btn btn-sm" href={outlook} target="_blank" rel="noreferrer">Outlook</a>
@@ -367,7 +367,7 @@ function UploadRow({ label, hint, kind, accept, assets, onChange }: {
         <ul style={{ listStyle: 'none', padding: 0, marginTop: 8 }} className="stack">
           {mine.map((a) => (
             <li key={a.id} className="spread small" style={{ background: 'var(--surface-2)', borderRadius: 'var(--r-md)', padding: '6px 10px' }}>
-              <span className="truncate">📎 {a.filename} <span className="faint">({fmtBytes(a.size)})</span></span>
+              <span className="truncate">{a.filename} <span className="faint">({fmtBytes(a.size)})</span></span>
               <Button size="sm" variant="ghost" aria-label={`Remove ${a.filename}`} onClick={async () => {
                 await api.portalDeleteAsset(a.id)
                 onChange(await api.portalMe())
