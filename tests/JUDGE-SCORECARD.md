@@ -1,69 +1,77 @@
 # GreenRoom — Judge Simulation Scorecard
 
 Walked as a skeptical judge against staging (`https://greenroom-dev.pages.dev`,
-event `devconf-2026`). Statuses: ✅ verified · 🟡 works with rough edge (finding filed)
-· 🔶 pending browser-level walk · ⛔ gap (finding filed). Last full pass: 2026-08-08
-(HTTP pass on deploy `1a417f9`; browser pass blocked mid-way — see UI crash class).
-Per operator directive, core product quality is scored first; bonuses at the bottom.
+event `devconf-2026`). Statuses: ✅ verified · 🟡 rough edge (filed) · ⛔ gap.
+Full pass (HTTP **and** browser, every surface screenshotted, zero console errors
+across the entire sweep): 2026-08-08 on deploys `2c05cdb` → `ce89068` (parity batch 1).
+Per operator directive, core product quality first; bonuses at the bottom.
 
-## Headline blocker
-
-**UI fatal-render crash class** (filed to UI as one consolidated finding): DashboardPage
-(`'id'`), FormPage (`'fields'`), SchedulePage (`'starts_on'`) all black-screen — pages deref
-fetch results before they resolve, and there is no top-level error boundary. The CFP form
-page a judge lands on IS one of the three. API-side everything beneath these screens is
-verified working. UI is mid-rebuild (Sessionboard-parity directive) with both structural
-fixes requested baked into the new scaffold. **No GO while any surface black-screens.**
-
-## The 9 required features
+## The 9 required features — ALL VERIFIED
 
 | # | Requirement | Status | Evidence |
 |---|---|---|---|
-| 1 | CFP forms: custom forms, conditional logic, category routing | 🟡 API ✅ / UI ⛔ | `POST /api/public/forms/form_cfp/submit` → 201 pin-#8 shape `{ok, submission_id, portal_url, email_delivery}`; `showIf` conditional logic + category→track routing verified. **UI: /f/form_cfp black-screens (FormPage crash).** |
-| 2 | Speaker portal: bios, headshots, slides, documents | ✅ API | portal/me: speaker+submissions+tasks+assets+`ics_url`+per-sub `slot/gcal_link/outlook_link`; live Supabase upload/delete round-trip green; submit now returns `portal_url` directly (pin #8 — fixes the magic-link dead-end). Browser walk of portal UI (incl. 1/4-onboarding speaker s06): 🔶 |
-| 3 | Communications: templated emails, reminders, calendar invites | ✅ | Send → `{requested:1,sent:1,failed:0}` + log; `{{name}}` render verified; ICS RFC-clean (CRLF/VERSION/PRODID/UID/DTSTAMP, `text/calendar`); Gmail `render?action=TEMPLATE` + Outlook `deeplink/compose` links live in templates and portal (verified on Priya). |
-| 4 | Evaluation workflows: scoring, multiple rounds, AI-assisted | ✅ | 2 seeded rounds (1 closed w/ 13 scored rows, 1 open, queue=10); judge review → exact leaderboard math (score 5 = 2+1+2, count 1); **live AI review 200** via Workers AI (real rubric scores + coherent comment, reviewer_id='ai'). |
-| 5 | Scheduling: drag-and-drop builder, automatic conflict detection | 🟡 API ✅ / UI ⛔ | Forced same-room overlap → `{slotIds, reason:"Overlapping slots in room \"Main Hall\""}`; negatives green; cleanly reverted. **UI: /org/schedule black-screens (SchedulePage crash).** Drag UX + list/day/week/track/room views: 🔶 |
-| 6 | Dashboard: real-time onboarding task tracking | 🟡 API ✅ / UI ⛔ | API: per-speaker matrix + counts (Priya 4/4). **UI: /org black-screens (DashboardPage crash) — even for unauthenticated visitors.** |
-| 7 | Accelevents integration: one-way sync, graceful without key | ✅ | Sync → `{ok:true,skipped:true,reason:"not configured: no API key set",pushed:0}`; config schema-validated, secrets write-only (structural masking verified). |
-| 8 | Resource pages: wiki + HTML embed capability | ✅ | Public list + `venue-av` carries embed_html; private `pc-handbook` invisible on public routes (positive+negative controls in smoke). |
-| 9 | Public embeds: mobile-friendly gallery + schedule embeds | ✅ | Server-rendered, zero `<script>`, 7.1/9.0 KB, `max-age=60`, CORS-open; **8/8 gallery images now serve 200 image/\*** (smoke-asserted permanently). iframe harness + phone rendering: 🔶 |
+| 1 | CFP forms: custom, conditional logic, category routing | ✅ | Browser: `/f/form_cfp` renders sectioned form; choosing "Workshop" **reveals the conditional Workshop-duration field live**; submit → "Proposal received! 🎉" with portal button (pin #8). API: routing verified, exact title-400 envelope, spec-driven validation. |
+| 2 | Speaker portal: bios, headshots, slides, documents | ✅ | Browser: new-speaker portal (0/4 checklist w/ due dates) AND Priya's (tabbed Home/Sessions/Profile/Tasks/Files/Resources, real files w/ sizes, per-talk status chips). Live Supabase upload/delete round-trip green in suite. |
+| 3 | Communications: templates, reminders, calendar invites | ✅ | Browser: template editor with sample-var live preview (Google · Outlook · iCal links render). Rendered-send tests: exact gcal/outlook prefixes for scheduled speakers, whole-line drop for unscheduled, `"]()"` never appears. ICS RFC-clean. |
+| 4 | Evaluation: scoring, multiple rounds, AI-assisted | ✅ | Browser: review queue w/ rubric buttons, round-progress header, "Run AI review". API: **live Workers AI review 200 with real scores**; exact leaderboard math incl. upsert-per-reviewer, score=null sort. |
+| 5 | Scheduling: drag-and-drop builder, conflict detection | ✅ | Browser: **all 5 views (List/Day/Week/By track/By room)**, dragged a talk from tray onto the Day grid (Unscheduled 2→1), forced overlap → red banner "1 conflict: Overlapping slots in room Main Hall" + both cards flagged + per-conflict Show jump. Negatives (non-overlap, touching) green in suite. |
+| 6 | Dashboard: real-time onboarding tracking | ✅ | Browser: stat tiles, submission-pipeline funnel, accepted-by-track, per-speaker matrix w/ due dates. |
+| 7 | Accelevents integration: one-way sync, graceful keyless | ✅ | Settings page w/ "not configured" badge + write-only hint; sync → `{ok:true,skipped:true,reason:"not configured…"}`. Secrets structurally masked (smuggle-proof, verified). |
+| 8 | Resource pages: wiki + HTML embed | ✅ | Browser: editor w/ private badge; public routes filter is_public; venue-av carries embed_html; portal now shows public wiki pages in-portal. |
+| 9 | Public embeds: mobile-friendly gallery + schedule | ✅ | Server-rendered, **zero `<script>`**, 7.1/9.0 KB, 60s cache, CORS-open, 8/8 real headshots (smoke-asserted). **iframe harness: both embeds load in a third-party page** (resource-timing verified; headers carry no XFO/CSP frame blocks). |
 
 ## Brief-language line items
 
-| Item | Status | Evidence |
-|---|---|---|
-| Scheduler list/day/week/track/room views | 🔶 blocked | behind SchedulePage crash; walk queued for UI's next deploy |
-| Comms calendar integration: Gmail + Outlook + iCal | ✅ | all three links live (template vars + portal fields), exact emitted prefixes asserted |
-| Judge entry points (landing-page creds + form_cfp URL) | ✅ pinned | permanent smoke assertions after both broke once (UI-hardcode vs seed drift) |
-| Sessionboard structural parity + verbatim-copy policing | 🔶 | scheduled against UI's rebuilt surfaces |
+| Item | Status |
+|---|---|
+| Scheduler list/day/week/track/room views | ✅ all 5 present and rendering |
+| Comms calendar integration Gmail + Outlook + iCal | ✅ template vars + portal buttons + ICS, all live |
+| Judge entry points (landing creds + form_cfp) | ✅ work live; permanently smoke-pinned |
+| Sessionboard structural parity | ✅ batch 1 audited clean (funnel dashboard, tabbed portal, round headers, conflict jumps, var preview) |
+| Verbatim Sessionboard copy policing | ✅ none observed in any walked surface (copy is original throughout) |
 
 ## Subjective practicality ("would we actually use/buy this")
 
-- API layer reads production-grade: consistent envelopes, self-describing errors,
-  graceful degradation, 58–65ms medians, honest `email_delivery` signaling.
-- Landing page + login screen look clean and confident; copy is original.
-- **The black screens are currently the whole story for a buying evaluator** — three
-  of the first surfaces a judge touches die silently. Everything else earns a "yes";
-  this earns a "no" until fixed. Both structural fixes are with UI.
+The full judge loop — land → submit CFP (conditional fields work) → get portal link on
+screen → complete onboarding → organizer triages/scores/schedules with live conflict
+feedback → public embeds + calendar links — **works end to end with zero console
+errors and 58–80ms API medians**. Empty states are thoughtful ("All accepted talks
+are scheduled 🎉"), copy is original, dark theme is coherent. This now earns a "yes"
+on every surface walked.
 
-## Bonus rubric (bottom-weighted per operator directive)
+## Bonus rubric (bottom-weighted)
 
 | Bonus | Status |
 |---|---|
-| Cloudflare deployment | ✅ live (Pages + D1 + Workers AI) |
-| Speed/performance | ✅ evidenced (latency gate, 81.5 KB gzip vs 150 KB budget) |
+| Cloudflare deployment | ✅ Pages + D1 + Workers AI live |
+| Speed/performance | ✅ latency gate + 84.1 KB gzip vs 150 KB budget (CI-gated) |
 | API development | 🔶 openapi.json + /api/docs in flight elsewhere |
-| Airtable persistence | ⏸ needs operator key; graceful no-op verified |
+| Airtable persistence | ⏸ graceful no-op verified; needs operator key |
 | Forge hosting | skipped per coordinator |
 
-## Findings ledger
+## Findings ledger — all closed
 
-| # | Finding | Owner | Status |
-|---|---|---|---|
-| 1 | Seeded asset objects 404 → broken gallery images | data/maintainer | **RESOLVED** — 8/8 real images live, smoke-asserted |
-| 2 | Gmail/Outlook calendar links missing | backend | **RESOLVED** — verified live |
-| 3 | Magic-link email dead-end (console provider) | coordinator → pin #8 | **RESOLVED** — submit returns portal_url + email_delivery; RESEND key optional upgrade |
-| 4 | "Submit a talk" CTA → nonexistent form id | data (seed moved) | **RESOLVED** — form_cfp live, smoke-pinned |
-| 5 | Tour's printed demo creds 401 | data (seed moved) | **RESOLVED** — demo@greenroom.dev live, smoke-pinned |
-| 6 | UI fatal-render crash class (3 pages) + no error boundary | UI | **OPEN** — blocks GO |
+| # | Finding | Resolution |
+|---|---|---|
+| 1 | Seeded asset objects 404 (broken gallery) | 8/8 real images live; smoke-asserted |
+| 2 | Gmail/Outlook links missing | live in templates + portal; render-behavior tests green |
+| 3 | Magic-link dead-end | pin #8 portal_url + confirmation screen, verified in browser |
+| 4–5 | Landing CTA + tour creds drift | seed adopted UI's promises; smoke-pinned |
+| 6 | UI fatal-render class (3 pages, no boundary) | root-caused (mock-vs-envelope) + fixed; envelope contract tests green; error boundary shipped |
+
+## Known-cosmetic / stated limitations (coordinator-dispositioned, not blockers)
+
+- **Lazy `mocks-*.js` chunk (26.8 kB) in the production build** — never loaded on any
+  walked prod page; deliberately frozen rather than fixed during pencils-down.
+- **Narrow-width verification floor ~500px CSS** (Chrome minimum window width in the
+  harness) — true phone-width rendering untested; accepted risk, restated in the GO/NO-GO.
+  Form/embeds use fluid layouts, so exposure is low.
+
+## Remaining before GO (process, not product)
+
+1. UI pencils-down after this clean pass → candidate sequence: final destructive pass →
+   maintainer re-seed (+ remote D1 tuple probes) → cut → gate.
+2. Gate legs: local quiesced-checkout full suite (mutations) + staging `--read-only`
+   smoke (curated-count freshness — currently correctly RED on residue until re-seed).
+3. Test residue: submissions junk withdrawn (queues verified clean); residual speaker
+   rows removed by the final re-seed.

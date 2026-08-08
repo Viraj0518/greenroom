@@ -233,6 +233,13 @@ Storage-dependent routes return 501 `code: "storage_not_configured"` while R2 is
    says the link is their access key, when `"real"` it adds "we've also emailed it to you".
    Judges/self-hosters get a working flow with zero email configuration.
 
+9. **Active-speaker semantics (coordinator, 2026-08-08).** Organizer aggregates — the dashboard
+   matrix and its counts (`speakers`, `complete_speakers`, onboarding %) — include ONLY speakers
+   with ≥1 non-withdrawn submission for the event. Speakers whose submissions are all withdrawn
+   (e.g. cleaned-up test entries) drop out of dashboards automatically; their rows stay in the DB.
+   The submissions pipeline funnel may still show the withdrawn count as a summary line. Public
+   speaker surfaces already filter to accepted; unchanged.
+
 ## Bindings (wrangler.toml names — maintainer owns file, these names are fixed)
 - D1: `DB` (database `greenroom-db`)
 - R2: `FILES` (bucket `greenroom-files`) — commented out until billing unblocks; see pin #7

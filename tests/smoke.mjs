@@ -310,6 +310,30 @@ await check('pin #6: embed pages are self-contained (< 30 KB, no SPA bundle refe
   }
 });
 
+if (readOnly) {
+  await check('curated dataset freshness (read-only mode): counts match data\'s designed demo', async () => {
+    // Login is a read (session row is ephemeral auth state, not demo content).
+    const login = await fetch(`${base}/api/auth/login`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'demo@greenroom.dev', password: 'greenroom-demo' }),
+    });
+    assert(login.status === 200, `demo login ${login.status}`);
+    const cookie = (login.headers.get('set-cookie') ?? '').split(';')[0];
+    const subs = (await (await fetch(`${base}/api/events/${SEED.eventId}/submissions`, { headers: { cookie } })).json())?.submissions ?? [];
+    assert(subs.length === 18, `submissions=${subs.length}, curated=18 — staging has residue or missed re-seed`);
+    const counts = {};
+    for (const s of subs) counts[s.status] = (counts[s.status] ?? 0) + 1;
+    const curated = { submitted: 3, in_review: 3, accepted: 8, rejected: 2, waitlisted: 1, withdrawn: 1 };
+    for (const [k, v] of Object.entries(curated)) {
+      assert(counts[k] === v, `status ${k}=${counts[k] ?? 0}, curated=${v}`);
+    }
+    const speakers = (await (await fetch(`${base}/api/public/events/${SEED.eventSlug}/speakers`)).json())?.speakers ?? [];
+    assert(speakers.length === 8, `public speakers=${speakers.length}, curated=8`);
+  });
+}
+
+await selfClean();
+
 const failed = results.filter((r) => !r.ok);
-console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
+console.log(`\n${results.length - failed.length}/${results.length} checks passed (mode: ${readOnly ? 'read-only' : 'full'})`);
 process.exit(failed.length ? 1 : 0);
