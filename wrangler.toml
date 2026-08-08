@@ -1,0 +1,22 @@
+# GreenRoom — Cloudflare Pages project config (maintainer-owned; binding names are fixed by CONTRACTS.md)
+name = "greenroom-dev"
+compatibility_date = "2026-08-01"
+pages_build_output_dir = "dist"
+
+[vars]
+APP_BASE_URL = "https://greenroom-dev.pages.dev"
+EMAIL_FROM = "greenroom@example.com"
+# Secrets (set via `wrangler pages secret put`, never committed): RESEND_API_KEY, ANTHROPIC_API_KEY
+
+[[d1_databases]]
+binding = "DB"
+database_name = "greenroom-db"
+database_id = "73dd90b3-ee1c-4497-b389-6b1e50da0412"
+migrations_dir = "db/migrations"
+
+# BLOCKED 2026-08-08: R2 is not enabled on this Cloudflare account (API error 10042).
+# Enable R2 in the dashboard (R2 → purchase/accept terms), then run
+# `pnpm exec wrangler r2 bucket create greenroom-files` and uncomment:
+# [[r2_buckets]]
+# binding = "FILES"
+# bucket_name = "greenroom-files"

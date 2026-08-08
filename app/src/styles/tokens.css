@@ -1,0 +1,115 @@
+/* GreenRoom design tokens — light is the base, dark overrides via media query
+   (system preference) and [data-theme="dark"] (explicit toggle). */
+
+:root {
+  /* color */
+  --bg: #f6f7f5;
+  --surface: #ffffff;
+  --surface-2: #eef0ec;
+  --surface-3: #e4e7e0;
+  --border: #dcdfd8;
+  --border-strong: #c3c8bc;
+  --text: #1b2420;
+  --muted: #5f6b64;
+  --faint: #8b958e;
+
+  --accent: #0e7a4d;
+  --accent-hover: #0a6640;
+  --accent-soft: #e0f0e8;
+  --accent-contrast: #ffffff;
+
+  --danger: #c2402f;
+  --danger-soft: #f9e6e2;
+  --warn: #a86a08;
+  --warn-soft: #faf0da;
+  --ok: #0e7a4d;
+  --ok-soft: #e0f0e8;
+  --info: #2563ab;
+  --info-soft: #e3edf8;
+
+  --focus: #0e7a4d66;
+
+  /* elevation */
+  --shadow-1: 0 1px 2px rgb(27 36 32 / 0.06);
+  --shadow-2: 0 2px 8px rgb(27 36 32 / 0.09);
+  --shadow-3: 0 8px 28px rgb(27 36 32 / 0.16);
+
+  /* shape + type */
+  --r-sm: 6px;
+  --r-md: 9px;
+  --r-lg: 14px;
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141815;
+    --surface: #1c211d;
+    --surface-2: #232a25;
+    --surface-3: #2b332d;
+    --border: #2e362f;
+    --border-strong: #46504a;
+    --text: #e7ebe7;
+    --muted: #a1aba3;
+    --faint: #6f7972;
+
+    --accent: #3ecf8e;
+    --accent-hover: #5cdca0;
+    --accent-soft: #1d3a2c;
+    --accent-contrast: #0c1410;
+
+    --danger: #f07c6c;
+    --danger-soft: #3d221d;
+    --warn: #e0a94f;
+    --warn-soft: #3a2f1a;
+    --ok: #3ecf8e;
+    --ok-soft: #1d3a2c;
+    --info: #6da8e8;
+    --info-soft: #1c2c40;
+
+    --focus: #3ecf8e66;
+
+    --shadow-1: 0 1px 2px rgb(0 0 0 / 0.3);
+    --shadow-2: 0 2px 8px rgb(0 0 0 / 0.35);
+    --shadow-3: 0 8px 28px rgb(0 0 0 / 0.5);
+
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #141815;
+  --surface: #1c211d;
+  --surface-2: #232a25;
+  --surface-3: #2b332d;
+  --border: #2e362f;
+  --border-strong: #46504a;
+  --text: #e7ebe7;
+  --muted: #a1aba3;
+  --faint: #6f7972;
+
+  --accent: #3ecf8e;
+  --accent-hover: #5cdca0;
+  --accent-soft: #1d3a2c;
+  --accent-contrast: #0c1410;
+
+  --danger: #f07c6c;
+  --danger-soft: #3d221d;
+  --warn: #e0a94f;
+  --warn-soft: #3a2f1a;
+  --ok: #3ecf8e;
+  --ok-soft: #1d3a2c;
+  --info: #6da8e8;
+  --info-soft: #1c2c40;
+
+  --focus: #3ecf8e66;
+
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-2: 0 2px 8px rgb(0 0 0 / 0.35);
+  --shadow-3: 0 8px 28px rgb(0 0 0 / 0.5);
+
+  color-scheme: dark;
+}
