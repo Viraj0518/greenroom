@@ -69,6 +69,7 @@ export interface RoutingRule { whenCategory: string; assignTrack: string }
 
 export interface FormSpec { fields: FieldSpec[]; routing: RoutingRule[] }
 
+// API rows carry `spec` as an object; spec_json never crosses the API boundary.
 export interface FormDef {
   id: string
   event_id: string
@@ -76,16 +77,14 @@ export interface FormDef {
   is_open: number
   opens_at: string | null
   closes_at: string | null
-  spec_json: string | FormSpec
+  spec: FormSpec
   created_at: string
 }
 
-export interface PublicForm {
-  id: string
-  name: string
-  is_open: number
+/** GET /api/public/forms/:formId — {form: {...row, open}, event} */
+export interface PublicFormResponse {
+  form: FormDef & { open: number | boolean }
   event: { id: string; name: string; slug: string }
-  spec: FormSpec
 }
 
 // ----- submissions -----
@@ -100,12 +99,18 @@ export interface Submission {
   category: string | null
   track: string | null
   answers_json: string | Record<string, unknown> | null
+  /** organizer list endpoints return answers pre-parsed */
+  answers?: Record<string, unknown>
   status: SubmissionStatus
   created_at: string
   // joined by backend on organizer list endpoints
   speaker_name?: string
   speaker_email?: string
   speaker_company?: string
+  // portal/me only (2026-08-08): schedule + calendar links, null unless accepted+scheduled
+  slot?: { starts_at: string; ends_at: string; room: string | null } | null
+  gcal_link?: string | null
+  outlook_link?: string | null
 }
 
 // ----- reviews -----
@@ -113,12 +118,13 @@ export interface Submission {
 export interface RubricCriterion { key: string; label: string; max: number; description?: string }
 export interface Rubric { criteria: RubricCriterion[] }
 
+// API rows carry `rubric` as an object (null when unset).
 export interface ReviewRound {
   id: string
   event_id: string
   name: string
   round_no: number
-  rubric_json: string | Rubric
+  rubric: Rubric | null
   is_open: number
 }
 
@@ -133,7 +139,21 @@ export interface Review {
   created_at: string
 }
 
-export interface QueueItem { submission: Submission; my_review: Review | null; review_count: number }
+/** GET /api/rounds/:id/queue row (flat — mirrors reviews.ts). */
+export interface QueueRow {
+  id: string
+  title: string
+  abstract: string | null
+  category: string | null
+  track: string | null
+  status: SubmissionStatus
+  answers: Record<string, unknown>
+  speaker_name: string
+  speaker_company: string | null
+  my_review: { id: string; scores: Record<string, number>; comment: string | null } | null
+}
+
+export interface QueueResponse { round: ReviewRound; queue: QueueRow[] }
 
 // Pinned decision 2026-08-08: rows arrive sorted (score DESC, nulls last,
 // tie title ASC); score = mean of per-review totals, 2dp, null when no reviews.
@@ -165,11 +185,22 @@ export interface ScheduleSlot {
   starts_at: string
   ends_at: string
   kind: 'talk' | 'break' | string
+  // joined by backend on schedule GET (2026-08-08)
+  speaker_id?: string | null
+  speaker_name?: string | null
+  submission_title?: string | null
+  submission_track?: string | null
+  room_name?: string | null
+  track_name?: string | null
+  track_color?: string | null
 }
 
 export interface Conflict { slotIds: string[]; reason: string }
 
 export interface ScheduleResponse { slots: ScheduleSlot[]; conflicts: Conflict[] }
+
+/** Slot create/patch: the created/updated row's fields spread + fresh {slots, conflicts}. */
+export type ScheduleMutationResponse = ScheduleResponse & Partial<ScheduleSlot>
 
 // ----- comms -----
 
@@ -195,7 +226,7 @@ export interface EmailLogRow {
   created_at: string
 }
 
-export interface SendResult { sent: number; skipped: number; errors: string[] }
+export interface SendResult { requested: number; sent: number; failed: number; errors: string[] }
 
 // ----- onboarding / dashboard -----
 
@@ -236,6 +267,8 @@ export interface PortalMe {
   submissions: Submission[]
   tasks: PortalTask[]
   assets: Asset[]
+  /** speaker's personal ICS feed (2026-08-08) */
+  ics_url?: string
 }
 
 // Shape mirrors functions/src/routes/dashboard.ts exactly (verified 2026-08-08
@@ -279,17 +312,24 @@ export interface Resource {
 
 // ----- integrations -----
 
+// Mirrors integrations.ts: config is masked, secrets write-only; keys are
+// camelCase per CONFIG_SCHEMA (apiKey/eventId/baseUrl for accelevents,
+// apiKey/baseId for airtable).
 export interface Integration {
-  id: string
-  event_id: string
-  kind: 'accelevents' | 'airtable'
-  config_json: string | Record<string, unknown>
-  last_synced_at: string | null
-  last_status: string | null
-  configured?: boolean
+  kind: 'accelevents' | 'airtable' | string
+  configured: boolean
+  config: Record<string, unknown>
+  last_synced_at?: string | null
+  last_status?: string | null
 }
 
-export interface SyncResult { ok: boolean; pushed: Record<string, number>; message: string }
+export interface SyncResult {
+  ok: boolean
+  skipped?: boolean
+  reason?: string
+  pushed?: number | Record<string, number>
+  error?: string
+}
 
 // ----- public embeds -----
 
@@ -334,12 +374,13 @@ export function asObj<T>(v: string | T | null | undefined, fallback: T): T {
   return v
 }
 
-export function formSpec(f: { spec_json: string | FormSpec }): FormSpec {
-  return asObj<FormSpec>(f.spec_json, { fields: [], routing: [] })
+export function formSpec(f: { spec?: FormSpec | null }): FormSpec {
+  const s = f.spec ?? { fields: [], routing: [] }
+  return { fields: s.fields ?? [], routing: s.routing ?? [] }
 }
 
-export function rubric(r: { rubric_json: string | Rubric }): Rubric {
-  return asObj<Rubric>(r.rubric_json, { criteria: [] })
+export function rubric(r: { rubric: Rubric | null }): Rubric {
+  return r.rubric ?? { criteria: [] }
 }
 
 export const STATUS_LABELS: Record<SubmissionStatus, string> = {

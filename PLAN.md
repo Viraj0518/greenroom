@@ -48,5 +48,11 @@ deployment, Airtable persistence, performance, API development.
 - All sessions work directly in `~/greenroom` on `main`. Stay inside your owned directories. Shared root config files belong to the maintainer — message them to add deps.
 - **Maintainer commits on behalf of everyone** at meaningful checkpoints (at least every 1-2 hours of work) and pushes to GitHub.
 - Announce meaningful state changes (done X, blocked on Y) to the coordinator (this main session) via SendMessage.
-- MIT license. No proprietary code, no copied SaaS assets.
+- MIT license. No proprietary code.
+- **Design parity directive (operator, 2026-08-08): mirror Sessionboard's real UI as closely as
+  possible — screen structure, navigation, layout patterns, dashboard composition — "even the
+  dashboards".** Sources: sessionboard.com product pages/tour, public demo videos, G2/Capterra
+  screenshots. Hard boundary: structural/workflow parity ONLY — never copy their verbatim text,
+  icons, illustrations, images, CSS, or brand assets (infringement risk in an open-source repo);
+  write equivalent original copy and keep GreenRoom branding.
 - Milestone order: M1 skeleton boots locally (wrangler pages dev) → M2 CFP + portal + review end-to-end → M3 scheduler + comms + dashboard → M4 embeds + integrations + polish → M5 staged on Cloudflare + README + submission-ready.

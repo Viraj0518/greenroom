@@ -100,18 +100,46 @@ await check('public resources: seeded public pages present, private pc-handbook 
   assert(!r.text.includes('pc-handbook'), 'PRIVATE resource pc-handbook leaked on public route');
 });
 
-await check('organizer login works against seeded users (read-only: login + me)', async () => {
+await check('JUDGE ENTRY POINTS: the exact creds and form URL printed on the landing page work', async () => {
+  // These two are what the homepage promises a judge; they have broken before
+  // (UI-hardcode vs seed drift) — permanent assertions per coordinator.
+  const res = await fetch(`${base}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: 'demo@greenroom.dev', password: 'greenroom-demo' }),
+  });
+  assert(res.status === 200, `tour-creds login status ${res.status} — landing-page creds broken`);
+  const cookie = (res.headers.get('set-cookie') ?? '').split(';')[0];
+  assert(cookie.startsWith('gr_session='), 'no gr_session cookie set');
+  const me = await get('/api/auth/me', { cookie });
+  assert(me.status === 200 && me.text.includes('demo@greenroom.dev'), `me: ${me.status}`);
+  const form = await get('/api/public/forms/form_cfp');
+  assert(form.status === 200, `form_cfp fetch ${form.status} — "Submit a talk" CTA target broken`);
+});
+
+await check('organizer login works against seeded example.com admin too', async () => {
   const res = await fetch(`${base}/api/auth/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ email: 'admin@example.com', password: 'demo-greenroom-2026' }),
   });
   assert(res.status === 200, `login status ${res.status}`);
-  const cookie = (res.headers.get('set-cookie') ?? '').split(';')[0];
-  assert(cookie.startsWith('gr_session='), 'no gr_session cookie set');
-  const me = await get('/api/auth/me', { cookie });
-  assert(me.status === 200, `me status ${me.status}`);
-  assert(me.text.includes('admin@example.com'), 'me does not return the logged-in user');
+});
+
+await check('pin #8: CFP submit returns portal_url + email_delivery', async () => {
+  const res = await fetch(`${base}/api/public/forms/form_cfp/submit`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      speaker: { email: `smoke-pin8-${Date.now()}@smoke.greenroom.test`, name: 'Smoke Test' },
+      answers: { title: 'Smoke pin8 (ignore)', abstract: 'probe', category: 'AI & ML',
+                 session_format: 'Talk (30 min)', audience_level: 'Intermediate' },
+    }),
+  });
+  const body = JSON.parse(await res.text());
+  assert(res.status === 201, `status ${res.status}`);
+  assert(typeof body.portal_url === 'string' && body.portal_url.includes('token='), 'no portal_url with token');
+  assert(['logged', 'real'].includes(body.email_delivery), `email_delivery=${body.email_delivery}`);
 });
 
 if (SEED.published && SEED.formId) {
@@ -160,6 +188,49 @@ if (SEED.published && SEED.speakerId && SEED.speakerToken) {
     assert([401, 403, 404].includes(r.status), `expected denial, got ${r.status}`);
   });
 }
+
+// --- link integrity: no judge-facing link may strand (identifier-rename class) ---
+await check('link integrity: every app link in landing HTML + README + SUBMISSION resolves', async () => {
+  const { readFileSync, existsSync } = await import('node:fs');
+  const { join, dirname } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+  const sources = [];
+  sources.push(['landing', (await get('/')).text]);
+  for (const f of ['README.md', 'SUBMISSION.md']) {
+    const p = join(root, f);
+    if (existsSync(p)) sources.push([f, readFileSync(p, 'utf8')]);
+  }
+
+  const paths = new Set();
+  for (const [, text] of sources) {
+    // absolute URLs on our host
+    for (const m of text.matchAll(/https?:\/\/greenroom-dev\.pages\.dev(\/[^\s)"'<>\]]*)?/g)) {
+      paths.add(m[1] || '/');
+    }
+    // root-relative hrefs/links in HTML and markdown
+    for (const m of text.matchAll(/(?:href="|\]\()(\/(?:f|embed|org|portal|api)[^\s)"'<>\]]*)/g)) {
+      paths.add(m[1]);
+    }
+  }
+
+  const broken = [];
+  for (const p of paths) {
+    const clean = p.replace(/[.,)]+$/, '');
+    if (/^\/api\/auth|^\/org(\/|$)|^\/portal/.test(clean)) continue; // auth-gated: covered elsewhere
+    const res = await fetch(base + clean, { redirect: 'follow' });
+    if (res.status !== 200) { broken.push(`${clean} → ${res.status}`); continue; }
+    // SPA fallback serves 200 for ANY path — for form links, the real check is the spec API
+    const formId = clean.match(/^\/f\/([^/?#]+)/)?.[1];
+    if (formId) {
+      const spec = await fetch(`${base}/api/public/forms/${formId}`);
+      if (spec.status !== 200) broken.push(`${clean} → form spec ${spec.status} (dead form id)`);
+    }
+  }
+  assert(paths.size > 0, 'no links extracted — sources missing?');
+  assert(broken.length === 0, `stranded links: ${broken.join('; ')}`);
+});
 
 // --- pin #6: latency gate on public endpoints (proxy for the edge budget) ---
 await check('latency: public endpoints median < 500ms (3 samples each)', async () => {

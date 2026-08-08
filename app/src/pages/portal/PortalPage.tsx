@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api, ApiError, assetUrl, icsUrl, setSpeakerToken } from '../../api'
 import type { Asset, PortalMe } from '../../types'
-import { fmtBytes, fmtDate, isOverdue } from '../../lib'
+import { fmtBytes, fmtDate, fmtDateTime, isOverdue } from '../../lib'
 import {
   Avatar, Badge, Button, Card, EmptyState, Field, Input, Progress, Spinner, Textarea, useToast,
 } from '../../components/ui'
@@ -104,18 +104,27 @@ export function PortalPage() {
             : (
               <ul style={{ listStyle: 'none', padding: 0 }} className="stack">
                 {me.submissions.map((s) => (
-                  <li key={s.id} className="spread">
-                    <span className="grow">
-                      <strong>{s.title}</strong>
-                      {s.track && <span className="muted small"> · {s.track}</span>}
-                    </span>
-                    <Badge tone={STATUS_BADGE[s.status]}>{STATUS_LABELS[s.status]}</Badge>
+                  <li key={s.id}>
+                    <div className="spread">
+                      <span className="grow">
+                        <strong>{s.title}</strong>
+                        {s.track && <span className="muted small"> · {s.track}</span>}
+                      </span>
+                      <Badge tone={STATUS_BADGE[s.status]}>{STATUS_LABELS[s.status]}</Badge>
+                    </div>
+                    {s.slot && (
+                      <div className="row-wrap small muted" style={{ marginTop: 4 }}>
+                        <span>🗓 {fmtDateTime(s.slot.starts_at)}{s.slot.room ? ` · ${s.slot.room}` : ''}</span>
+                        {s.gcal_link && <a className="btn btn-sm" href={s.gcal_link} target="_blank" rel="noreferrer">Google Calendar</a>}
+                        {s.outlook_link && <a className="btn btn-sm" href={s.outlook_link} target="_blank" rel="noreferrer">Outlook</a>}
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>
             )}
           {me.submissions.some((s) => s.status === 'accepted') && (
-            <CalendarLinks speakerId={me.speaker.id} eventName={me.event.name} />
+            <CalendarLinks speakerId={me.speaker.id} eventName={me.event.name} icsPath={me.ics_url} />
           )}
         </Card>
       </div>
@@ -128,9 +137,9 @@ export function PortalPage() {
  * subscribe links wrapping the same feed URL — plain URL templates, zero deps.
  * Subscribed feeds auto-update when the schedule changes.
  */
-function CalendarLinks({ speakerId, eventName }: { speakerId: string; eventName: string }) {
+function CalendarLinks({ speakerId, eventName, icsPath }: { speakerId: string; eventName: string; icsPath?: string }) {
   const token = localStorage.getItem(TOKEN_KEY) ?? ''
-  const path = icsUrl(speakerId, token)
+  const path = icsPath ?? icsUrl(speakerId, token)
   const abs = `${window.location.origin}${path}`
   const webcal = abs.replace(/^https?:/, 'webcal:')
   const google = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`
@@ -150,7 +159,10 @@ function MarkDone({ taskKey, onDone }: { taskKey: string; onDone: (m: PortalMe) 
   return (
     <Button size="sm" busy={busy} onClick={async () => {
       setBusy(true)
-      try { onDone(await api.portalTaskDone(taskKey)) } finally { setBusy(false) }
+      try {
+        await api.portalTaskDone(taskKey)
+        onDone(await api.portalMe())
+      } finally { setBusy(false) }
     }}>
       Mark done
     </Button>
@@ -171,7 +183,10 @@ function ProfileCard({ me, onSaved }: { me: PortalMe; onSaved: (m: PortalMe) => 
   async function save(e: FormEvent) {
     e.preventDefault()
     setBusy(true)
-    try { onSaved(await api.portalUpdate(form)) } finally { setBusy(false) }
+    try {
+      await api.portalUpdate(form) // returns {speaker} only — refetch for full state
+      onSaved(await api.portalMe())
+    } finally { setBusy(false) }
   }
 
   return (

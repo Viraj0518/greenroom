@@ -5,11 +5,17 @@
  * Used as vitest globalSetup (see tests/vitest.config.ts).
  */
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
-import { rmSync, existsSync, mkdirSync } from 'node:fs';
+import { rmSync, existsSync, mkdirSync, createWriteStream, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ROOT = join(import.meta.dirname ?? __dirname, '..', '..');
 const STATE_DIR = join(ROOT, 'tests', '.state');
+export const SERVER_LOG = join(STATE_DIR, 'server.log');
+
+/** Read the captured wrangler/server output (rendered console emails live here). */
+export function serverLog(): string {
+  try { return readFileSync(SERVER_LOG, 'utf8'); } catch { return ''; }
+}
 const PORT = Number(process.env.TEST_PORT ?? 8788);
 export const BASE_URL = process.env.TEST_BASE_URL ?? `http://127.0.0.1:${PORT}`;
 
@@ -58,11 +64,17 @@ export async function setup() {
   rmSync(STATE_DIR, { recursive: true, force: true });
   mkdirSync(join(ROOT, 'tests', '.static-stub'), { recursive: true });
   applyDb();
+  // Pipe output to a log file too: the console EmailProvider prints rendered
+  // email bodies to stdout, and comms tests assert on those rendered bodies.
+  mkdirSync(STATE_DIR, { recursive: true });
+  const logStream = createWriteStream(SERVER_LOG, { flags: 'w' });
   child = spawn(
     'pnpm',
     ['exec', 'wrangler', 'pages', 'dev', STATIC_DIR, '--port', String(PORT), '--persist-to', STATE_DIR],
-    { cwd: ROOT, stdio: 'inherit' },
+    { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] },
   );
+  child.stdout!.on('data', (d) => { process.stdout.write(d); logStream.write(d); });
+  child.stderr!.on('data', (d) => { process.stderr.write(d); logStream.write(d); });
   child.on('exit', (code) => {
     if (code !== null && code !== 0) console.error(`[stack] wrangler exited with code ${code}`);
   });

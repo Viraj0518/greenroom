@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { api } from '../../api'
+import { api, ApiError } from '../../api'
 import { useOrg } from './OrgLayout'
-import type { QueueItem, Review, ReviewRound, Rubric } from '../../types'
+import type { QueueRow, Review, ReviewRound, Rubric } from '../../types'
 import { asObj, rubric as getRubric } from '../../types'
 import { Badge, Button, Card, EmptyState, Select, Spinner, Textarea, useToast } from '../../components/ui'
 
@@ -9,7 +9,7 @@ export function ReviewPage() {
   const { event } = useOrg()
   const [rounds, setRounds] = useState<ReviewRound[] | null>(null)
   const [roundId, setRoundId] = useState<string>('')
-  const [queue, setQueue] = useState<QueueItem[] | null>(null)
+  const [queue, setQueue] = useState<QueueRow[] | null>(null)
   const [idx, setIdx] = useState(0)
 
   useEffect(() => {
@@ -22,7 +22,7 @@ export function ReviewPage() {
   useEffect(() => {
     if (!roundId) return
     setQueue(null)
-    api.reviewQueue(roundId).then((q) => { setQueue(q); setIdx(0) })
+    api.reviewQueue(roundId).then((r) => { setQueue(r.queue); setIdx(0) })
   }, [roundId])
 
   const round = rounds?.find((r) => r.id === roundId)
@@ -53,7 +53,7 @@ export function ReviewPage() {
           <Card pad={false} className="review-list">
             <ul style={{ listStyle: 'none', padding: 6, margin: 0, maxHeight: '70vh', overflowY: 'auto' }}>
               {queue.map((it, i) => (
-                <li key={it.submission.id}>
+                <li key={it.id}>
                   <button onClick={() => setIdx(i)} style={{
                     all: 'unset', display: 'block', width: '100%', boxSizing: 'border-box',
                     padding: '8px 10px', borderRadius: 'var(--r-md)', cursor: 'pointer',
@@ -64,7 +64,7 @@ export function ReviewPage() {
                         {it.my_review ? '✓' : '○'}
                       </span>
                       <span className="truncate small" style={{ fontWeight: i === idx ? 640 : 450 }}>
-                        {it.submission.title}
+                        {it.title}
                       </span>
                     </span>
                   </button>
@@ -74,14 +74,19 @@ export function ReviewPage() {
           </Card>
 
           {item && (
-            <ReviewPanel key={item.submission.id} item={item} roundId={roundId} rubric={rubric}
+            <ReviewPanel key={item.id} item={item} roundId={roundId} rubric={rubric}
               onSaved={(rev) => {
-                setQueue((q) => q?.map((x) => (x.submission.id === item.submission.id ? { ...x, my_review: rev } : x)) ?? null)
-                if (idx < queue.length - 1) setIdx(idx + 1)
-              }}
-              onAi={(rev) => {
-                setQueue((q) => q?.map((x) => (x.submission.id === rev.submission_id
-                  ? { ...x, review_count: x.review_count + 1 } : x)) ?? null)
+                setQueue((q) => q?.map((x) => (x.id === item.id
+                  ? {
+                    ...x,
+                    my_review: {
+                      id: rev.id,
+                      scores: asObj<Record<string, number>>(rev.scores_json, {}),
+                      comment: rev.comment,
+                    },
+                  }
+                  : x)) ?? null)
+                if (queue && idx < queue.length - 1) setIdx(idx + 1)
               }} />
           )}
         </div>
@@ -90,14 +95,12 @@ export function ReviewPage() {
   )
 }
 
-function ReviewPanel({ item, roundId, rubric, onSaved, onAi }: {
-  item: QueueItem; roundId: string; rubric: Rubric
-  onSaved: (r: Review) => void; onAi: (r: Review) => void
+function ReviewPanel({ item, roundId, rubric, onSaved }: {
+  item: QueueRow; roundId: string; rubric: Rubric
+  onSaved: (r: Review) => void
 }) {
   const toast = useToast()
-  const s = item.submission
-  const existing = item.my_review ? asObj<Record<string, number>>(item.my_review.scores_json, {}) : {}
-  const [scores, setScores] = useState<Record<string, number>>(existing)
+  const [scores, setScores] = useState<Record<string, number>>(item.my_review?.scores ?? {})
   const [comment, setComment] = useState(item.my_review?.comment ?? '')
   const [busy, setBusy] = useState(false)
   const [aiBusy, setAiBusy] = useState(false)
@@ -113,21 +116,24 @@ function ReviewPanel({ item, roundId, rubric, onSaved, onAi }: {
   async function save() {
     setBusy(true)
     try {
-      const rev = await api.submitReview(roundId, s.id, { scores_json: scores, comment })
+      const rev = await api.submitReview(roundId, item.id, { scores_json: scores, comment })
       toast('Review saved ✓')
       onSaved(rev)
+    } catch {
+      toast('Could not save the review', { error: true })
     } finally { setBusy(false) }
   }
 
   async function runAi() {
     setAiBusy(true)
     try {
-      const rev = await api.aiReview(roundId, s.id)
+      const rev = await api.aiReview(roundId, item.id)
       setAiReview(rev)
-      onAi(rev)
       toast('AI review complete')
-    } catch {
-      toast('AI review unavailable — is ANTHROPIC_API_KEY configured?', { error: true })
+    } catch (e) {
+      toast(e instanceof ApiError && e.code === 'ai_not_configured'
+        ? 'AI review is not configured on this deployment (set ANTHROPIC_API_KEY).'
+        : 'AI review failed — try again.', { error: true })
     } finally { setAiBusy(false) }
   }
 
@@ -136,15 +142,14 @@ function ReviewPanel({ item, roundId, rubric, onSaved, onAi }: {
       <Card>
         <div className="spread" style={{ alignItems: 'flex-start' }}>
           <div>
-            <h2>{s.title}</h2>
+            <h2>{item.title}</h2>
             <p className="muted small" style={{ marginTop: 3 }}>
-              {s.speaker_name}{s.speaker_company ? ` · ${s.speaker_company}` : ''}
-              {s.category ? <> · <Badge>{s.category}</Badge></> : null}
+              {item.speaker_name}{item.speaker_company ? ` · ${item.speaker_company}` : ''}
+              {item.category ? <> · <Badge>{item.category}</Badge></> : null}
             </p>
           </div>
-          <span className="muted small" style={{ flex: 'none' }}>{item.review_count} review{item.review_count === 1 ? '' : 's'}</span>
         </div>
-        <p style={{ whiteSpace: 'pre-wrap', marginTop: 12 }}>{s.abstract}</p>
+        <p style={{ whiteSpace: 'pre-wrap', marginTop: 12 }}>{item.abstract}</p>
       </Card>
 
       <Card title="Your score" actions={

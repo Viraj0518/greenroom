@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../../api'
-import type { FieldSpec, PublicForm } from '../../types'
+import type { FieldSpec, PublicFormResponse } from '../../types'
+import { formSpec } from '../../types'
 import { Button, Card, Field, Input, Select, Spinner, Textarea, EmptyState } from '../../components/ui'
 
 type Answers = Record<string, unknown>
@@ -76,7 +77,7 @@ function FieldControl({ f, value, error, onChange }: {
 export function FormPage() {
   const { formId = '' } = useParams()
   const nav = useNavigate()
-  const [form, setForm] = useState<PublicForm | null>(null)
+  const [data, setData] = useState<PublicFormResponse | null>(null)
   const [loadErr, setLoadErr] = useState<string | null>(null)
   const [answers, setAnswers] = useState<Answers>({})
   const [speaker, setSpeaker] = useState({ name: '', email: '' })
@@ -84,12 +85,15 @@ export function FormPage() {
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    api.publicForm(formId).then(setForm).catch((e) =>
+    api.publicForm(formId).then(setData).catch((e) =>
       setLoadErr(e instanceof ApiError && e.status === 404 ? 'This form does not exist.' : 'Could not load the form.'))
   }, [formId])
 
+  const form = data?.form ?? null
+  const event = data?.event ?? null
+
   const visibleFields = useMemo(
-    () => form?.spec.fields.filter((f) => isVisible(f, answers)) ?? [],
+    () => (form ? formSpec(form).fields.filter((f) => isVisible(f, answers)) : []),
     [form, answers],
   )
 
@@ -122,7 +126,7 @@ export function FormPage() {
       nav(`/f/${form.id}/success`, {
         state: {
           portal_url: res.portal_url, email_delivery: res.email_delivery,
-          event: form.event.name, title: payload.title,
+          event: event?.name, title: payload.title,
         },
       })
     } catch (err) {
@@ -135,11 +139,11 @@ export function FormPage() {
   if (loadErr) return <PublicShell><EmptyState glyph="🤷" title={loadErr} /></PublicShell>
   if (!form) return <PublicShell><Spinner label="Loading form…" /></PublicShell>
 
-  if (!form.is_open) {
+  if (!form.open) {
     return (
       <PublicShell>
         <EmptyState glyph="🔒" title="This call for speakers is closed">
-          Follow {form.event.name} for future announcements.
+          Follow {event?.name ?? 'the event'} for future announcements.
         </EmptyState>
       </PublicShell>
     )
@@ -149,7 +153,7 @@ export function FormPage() {
     <PublicShell>
       <header style={{ marginBottom: 22 }}>
         <p className="muted small" style={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-          {form.event.name}
+          {event?.name}
         </p>
         <h1>{form.name}</h1>
       </header>

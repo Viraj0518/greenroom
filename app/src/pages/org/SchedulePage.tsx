@@ -61,7 +61,7 @@ export function SchedulePage() {
   const trackByName = useCallback((name: string | null) => tracks.find((t) => t.name === name), [tracks])
   const subById = useCallback((id: string | null) => subs.find((s) => s.id === id), [subs])
   const titleOf = useCallback(
-    (s: ScheduleSlot) => s.title ?? subById(s.submission_id)?.title ?? 'Untitled',
+    (s: ScheduleSlot) => s.title ?? s.submission_title ?? subById(s.submission_id)?.title ?? 'Untitled',
     [subById],
   )
 
@@ -79,6 +79,7 @@ export function SchedulePage() {
     const [dropRoomId, minStr] = overId.split('|')
     const startMin = Number(minStr)
 
+    // slot mutations return the fresh full {slots, conflicts} — replace wholesale
     try {
       if (data.kind === 'sub' && data.submission) {
         const res = await api.createSlot(event.id, {
@@ -87,7 +88,7 @@ export function SchedulePage() {
           ends_at: zonedToUtc(day, startMin + DEFAULT_TALK_MIN, tz),
           kind: 'talk',
         })
-        setSlots((sl) => [...sl, res.slot])
+        setSlots(res.slots)
         setConflicts(res.conflicts)
       } else if (data.kind === 'slot' && data.slot) {
         const dur = (new Date(data.slot.ends_at).getTime() - new Date(data.slot.starts_at).getTime()) / 60000
@@ -96,7 +97,7 @@ export function SchedulePage() {
           starts_at: zonedToUtc(day, startMin, tz),
           ends_at: zonedToUtc(day, startMin + dur, tz),
         })
-        setSlots((sl) => sl.map((x) => (x.id === data.slot!.id ? res.slot : x)))
+        setSlots(res.slots)
         setConflicts(res.conflicts)
       }
     } catch {
@@ -108,6 +109,7 @@ export function SchedulePage() {
     setSlots((sl) => sl.filter((x) => x.id !== slot.id))
     try {
       const res = await api.deleteSlot(slot.id)
+      setSlots(res.slots)
       setConflicts(res.conflicts)
       toast('Removed from schedule')
     } catch {
@@ -318,7 +320,7 @@ function TimeGrid({ columns, droppable, onRemove, tz, conflictIds, trackById, ti
             return (
               <SlotBlock key={s.id} slot={s} top={(start - DAY_START) * PX_PER_MIN}
                 height={Math.max((end - start) * PX_PER_MIN, 22)}
-                color={trackById(s.track_id)?.color}
+                color={s.track_color ?? trackById(s.track_id)?.color}
                 conflict={conflictIds.has(s.id)}
                 title={titleOf(s)}
                 time={`${fmtTime(s.starts_at, tz)}–${fmtTime(s.ends_at, tz)}`}

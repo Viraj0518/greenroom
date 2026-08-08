@@ -6,11 +6,11 @@ import '../styles/landing.css'
 // judge-facing dead-end). Coordinate changes with the data lane.
 const DEMO_EMAIL = 'admin@example.com'
 const DEMO_PASSWORD = 'demo-greenroom-2026'
-const CFP_FORM_ID = '33333333-3333-4333-8333-333333333301'
+const CFP_FORM_ID = 'form_cfp' // renamed in a4's reseed 2026-08-08 — friendly TEXT PK
 
 // /embed/* and /f/* open real product surfaces; embeds are server-rendered (pin #6)
 const FEATURES = [
-  { href: '/f/form_cfp', glyph: '📝', title: 'CFP forms', go: 'Try the live form →',
+  { href: `/f/${CFP_FORM_ID}`, glyph: '📝', title: 'CFP forms', go: 'Try the live form →',
     desc: 'Custom submission forms with conditional questions and automatic category → track routing.' },
   { href: '/org/review', glyph: '✨', title: 'Reviews + AI assist', go: 'Open review queue →',
     desc: 'Rubric scoring across rounds, a reviewer queue, leaderboards — and one-click AI reviews.' },
@@ -36,7 +36,7 @@ export function Landing() {
         </p>
         <div className="land-ctas">
           <Link to="/org" className="btn btn-primary">Open the organizer demo</Link>
-          <Link to="/f/form_cfp" className="btn">Submit a talk</Link>
+          <Link to={`/f/${CFP_FORM_ID}`} className="btn">Submit a talk</Link>
         </div>
       </section>
 
@@ -60,7 +60,7 @@ export function Landing() {
           <div className="judge-step">
             <span className="judge-num">3</span>
             <span>
-              See the public side: the <Link to="/f/form_cfp">CFP form</Link> and the{' '}
+              See the public side: the <Link to={`/f/${CFP_FORM_ID}`}>CFP form</Link> and the{' '}
               <a href="/embed/speakers/devconf-2026">speaker</a> &amp;{' '}
               <a href="/embed/schedule/devconf-2026">schedule</a> embeds.
             </span>

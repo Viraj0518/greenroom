@@ -86,7 +86,7 @@ const cfpSpec: FormSpec = {
 const forms: FormDef[] = [{
   id: 'form_cfp', event_id: EV, name: 'Call for Speakers — DevConf 2026', is_open: 1,
   opens_at: '2026-06-01T00:00:00Z', closes_at: '2026-09-01T00:00:00Z',
-  spec_json: cfpSpec, created_at: now(),
+  spec: cfpSpec, created_at: now(),
 }]
 
 const SPEAKER_SEED: Array<[string, string, string, string]> = [
@@ -141,7 +141,7 @@ const submissions: Submission[] = SUB_SEED.map(([spIdx, title, category, status]
 
 const rounds: ReviewRound[] = [{
   id: 'rnd_1', event_id: EV, name: 'Round 1 — Program Committee', round_no: 1, is_open: 1,
-  rubric_json: {
+  rubric: {
     criteria: [
       { key: 'relevance', label: 'Relevance to audience', max: 5 },
       { key: 'depth', label: 'Technical depth', max: 5 },
@@ -245,6 +245,13 @@ const integrations = new Map<string, { config: Record<string, unknown>; last_syn
 
 // ---------------------------------------------------------------- helpers
 
+/** Secrets are write-only: reads show a mask, mirroring integrations.ts. */
+function maskConfig(config: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...config }
+  if (typeof out.apiKey === 'string' && out.apiKey !== '') out.apiKey = '••••••••'
+  return out
+}
+
 const MAGIC = 'demo-speaker-token'
 const magicSpeaker = new Map<string, string>([[MAGIC, 'sp_0']])
 
@@ -289,15 +296,25 @@ function joinSub(s: Submission): Submission {
 function portalMe(): PortalMe {
   const sp = currentSpeaker()
   const done = speakerTasks.get(sp.id) ?? new Map()
+  const tok = getSpeakerToken() ?? MAGIC
   return {
     speaker: sp,
     event: { id: EV, name: event.name, slug: event.slug, starts_on: event.starts_on, ends_on: event.ends_on, timezone: event.timezone },
-    submissions: submissions.filter((s) => s.speaker_id === sp.id),
+    submissions: submissions.filter((s) => s.speaker_id === sp.id).map((s) => {
+      const sl = s.status === 'accepted' ? slots.find((x) => x.submission_id === s.id) : undefined
+      return {
+        ...s,
+        slot: sl ? { starts_at: sl.starts_at, ends_at: sl.ends_at, room: rooms.find((r) => r.id === sl.room_id)?.name ?? null } : null,
+        gcal_link: null,
+        outlook_link: null,
+      }
+    }),
     tasks: onboardingTasks.map((t) => ({
       key: t.key, label: t.label, due_at: t.due_at, required: t.required,
       done: done.has(t.key) ? 1 : 0, done_at: done.get(t.key) ?? null,
     })),
     assets: assets.filter((a) => a.speaker_id === sp.id),
+    ics_url: `/api/public/ics/${sp.id}.ics?token=${encodeURIComponent(tok)}`,
   }
 }
 
@@ -396,21 +413,21 @@ const routes: Array<[string, RegExp, Handler]> = [
     sessionUser = b.email?.startsWith('riley') ? reviewer : { ...admin, email: b.email || admin.email }
     return { user: sessionUser }
   }],
-  ['POST', /^\/auth\/logout$/, () => { sessionUser = null; return undefined }],
+  ['POST', /^\/auth\/logout$/, () => { sessionUser = null; return { ok: true } }],
   ['GET', /^\/auth\/me$/, () => ({ user: requireOrganizer() })],
 
-  // events
-  ['GET', /^\/events$/, () => { requireOrganizer(); return [event] }],
+  // events — list is ENVELOPED, exactly like the server
+  ['GET', /^\/events$/, () => { requireOrganizer(); return { events: [event] } }],
   ['GET', /^\/events\/([^/]+)$/, () => { requireOrganizer(); return event }],
   ['PATCH', /^\/events\/([^/]+)$/, (_m, b) => { requireOrganizer(); Object.assign(event, b); return event }],
 
-  // forms
-  ['GET', /^\/events\/([^/]+)\/forms$/, () => { requireOrganizer(); return forms }],
+  // forms — rows carry `spec` objects; list enveloped
+  ['GET', /^\/events\/([^/]+)\/forms$/, () => { requireOrganizer(); return { forms } }],
   ['POST', /^\/events\/([^/]+)\/forms$/, (_m, b) => {
     requireOrganizer()
     const f: FormDef = { id: id('form'), event_id: EV, name: b.name ?? 'Untitled form', is_open: Number(b.is_open ?? 1),
       opens_at: b.opens_at ?? null, closes_at: b.closes_at ?? null,
-      spec_json: b.spec ?? { fields: [], routing: [] }, created_at: now() }
+      spec: b.spec ?? { fields: [], routing: [] }, created_at: now() }
     forms.push(f); return f
   }],
   ['GET', /^\/forms\/([^/]+)$/, (m) => { requireOrganizer(); const f = forms.find((x) => x.id === m[1]); if (!f) throw new ApiError(404, 'form not found'); return f }],
@@ -420,12 +437,12 @@ const routes: Array<[string, RegExp, Handler]> = [
     const { spec, ...rest } = b
     Object.assign(f, rest)
     if (b.is_open !== undefined) f.is_open = Number(b.is_open)
-    if (spec) f.spec_json = spec
+    if (spec) f.spec = spec
     return f
   }],
   ['GET', /^\/public\/forms\/([^/]+)$/, (m) => {
     const f = forms.find((x) => x.id === m[1]); if (!f) throw new ApiError(404, 'form not found')
-    return { id: f.id, name: f.name, is_open: f.is_open, event: { id: EV, name: event.name, slug: event.slug }, spec: formSpec(f) }
+    return { form: { ...f, open: f.is_open }, event: { id: EV, name: event.name, slug: event.slug } }
   }],
   ['POST', /^\/public\/forms\/([^/]+)\/submit$/, (m, b) => {
     const f = forms.find((x) => x.id === m[1]); if (!f) throw new ApiError(404, 'form not found')
@@ -450,14 +467,14 @@ const routes: Array<[string, RegExp, Handler]> = [
     magicSpeaker.set(token, sp.id)
     emails.push({ id: id('em'), event_id: EV, speaker_id: sp.id, template_key: 'confirmation',
       subject: `We got it: ${sub.title}`, status: 'sent', provider: 'console', created_at: now() })
-    // pinned decision #8: portal_url + email_delivery always returned
+    // pin #8 shape, mirroring forms.ts submit exactly
     return {
-      submission_id: sub.id, speaker_id: sp.id, magic_token: token,
+      ok: true, submission_id: sub.id,
       portal_url: `/portal?token=${encodeURIComponent(token)}`, email_delivery: 'logged',
     }
   }],
 
-  // submissions
+  // submissions — enveloped, answers pre-parsed
   ['GET', /^\/events\/([^/]+)\/submissions(?:\?(.*))?$/, (m) => {
     requireOrganizer()
     const q = new URLSearchParams(m[2] ?? '')
@@ -466,7 +483,7 @@ const routes: Array<[string, RegExp, Handler]> = [
     if (q.get('track')) out = out.filter((s) => s.track === q.get('track'))
     const needle = q.get('q')?.toLowerCase()
     if (needle) out = out.filter((s) => s.title.toLowerCase().includes(needle) || s.speaker_name?.toLowerCase().includes(needle))
-    return out
+    return { submissions: out.map((s) => ({ ...s, answers: asObj<Record<string, unknown>>(s.answers_json, {}) })) }
   }],
   ['PATCH', /^\/submissions\/([^/]+)$/, (m, b) => {
     requireOrganizer()
@@ -474,13 +491,13 @@ const routes: Array<[string, RegExp, Handler]> = [
     Object.assign(s, b); return joinSub(s)
   }],
 
-  // portal
+  // portal — mutations return partials, like the server
   ['GET', /^\/portal\/me$/, () => portalMe()],
   ['PATCH', /^\/portal\/me$/, (_m, b) => {
     const sp = currentSpeaker()
     Object.assign(sp, b)
     if (b.bio || b.tagline) speakerTasks.get(sp.id)?.set('bio', now())
-    return portalMe()
+    return { speaker: sp }
   }],
   ['POST', /^\/portal\/assets$/, (_m, _b, form) => {
     const sp = currentSpeaker()
@@ -493,37 +510,46 @@ const routes: Array<[string, RegExp, Handler]> = [
     const taskKey = kind === 'headshot' ? 'headshot' : kind === 'slides' ? 'slides' : null
     if (taskKey) speakerTasks.get(sp.id)?.set(taskKey, now())
     if (kind === 'headshot') sp.headshot_key = a.r2_key
-    return a
+    return { asset: a }
   }],
   ['DELETE', /^\/portal\/assets\/([^/]+)$/, (m) => {
     const sp = currentSpeaker()
     const i = assets.findIndex((a) => a.id === m[1] && a.speaker_id === sp.id)
     if (i >= 0) assets.splice(i, 1)
-    return undefined
+    return { ok: true }
   }],
   ['POST', /^\/portal\/tasks\/([^/]+)\/done$/, (m) => {
     const sp = currentSpeaker()
     speakerTasks.get(sp.id)?.set(m[1], now())
-    return portalMe()
+    return { ok: true }
   }],
 
-  // reviews
-  ['GET', /^\/events\/([^/]+)\/rounds$/, () => { requireOrganizer(); return rounds }],
+  // reviews — rounds carry `rubric`; queue is the flat {round, queue} shape
+  ['GET', /^\/events\/([^/]+)\/rounds$/, () => { requireOrganizer(); return { rounds } }],
   ['POST', /^\/events\/([^/]+)\/rounds$/, (_m, b) => {
     requireOrganizer()
     const r: ReviewRound = { id: id('rnd'), event_id: EV, name: b.name ?? 'New round', round_no: rounds.length + 1,
-      rubric_json: b.rubric_json ?? { criteria: [] }, is_open: 1 }
+      rubric: b.rubric ?? null, is_open: 1 }
     rounds.push(r); return r
   }],
   ['GET', /^\/rounds\/([^/]+)\/queue$/, (m) => {
     const user = requireOrganizer()
-    return submissions
+    const round = rounds.find((r) => r.id === m[1]); if (!round) throw new ApiError(404, 'round not found')
+    const queue = submissions
       .filter((s) => ['submitted', 'in_review'].includes(s.status) || reviews.some((r) => r.submission_id === s.id))
-      .map((s) => ({
-        submission: joinSub(s),
-        my_review: reviews.find((r) => r.round_id === m[1] && r.submission_id === s.id && r.reviewer_id === user.id) ?? null,
-        review_count: reviews.filter((r) => r.round_id === m[1] && r.submission_id === s.id).length,
-      }))
+      .map((s) => {
+        const sp = speakers.find((x) => x.id === s.speaker_id)
+        const mine = reviews.find((r) => r.round_id === m[1] && r.submission_id === s.id && r.reviewer_id === user.id)
+        return {
+          id: s.id, title: s.title, abstract: s.abstract, category: s.category, track: s.track,
+          status: s.status, answers: asObj<Record<string, unknown>>(s.answers_json, {}),
+          speaker_name: sp?.name ?? '', speaker_company: sp?.company ?? null,
+          my_review: mine
+            ? { id: mine.id, scores: asObj<Record<string, number>>(mine.scores_json, {}), comment: mine.comment }
+            : null,
+        }
+      })
+    return { round, queue }
   }],
   ['POST', /^\/rounds\/([^/]+)\/submissions\/([^/]+)\/review$/, (m, b) => {
     const user = requireOrganizer()
@@ -551,14 +577,14 @@ const routes: Array<[string, RegExp, Handler]> = [
   }],
   ['GET', /^\/events\/([^/]+)\/leaderboard(?:\?round=([^&]+))?$/, (m) => { requireOrganizer(); return leaderboard(m[2] ?? rounds[0].id) }],
 
-  // schedule
-  ['GET', /^\/events\/([^/]+)\/rooms$/, () => rooms],
+  // schedule — rooms/tracks lists enveloped; slot mutations return fresh {slots, conflicts}
+  ['GET', /^\/events\/([^/]+)\/rooms$/, () => ({ rooms })],
   ['POST', /^\/events\/([^/]+)\/rooms$/, (_m, b) => {
     requireOrganizer()
     const r: Room = { id: id('rm'), event_id: EV, name: b.name, capacity: b.capacity ?? null, sort: rooms.length + 1 }
     rooms.push(r); return r
   }],
-  ['GET', /^\/events\/([^/]+)\/tracks$/, () => tracks],
+  ['GET', /^\/events\/([^/]+)\/tracks$/, () => ({ tracks })],
   ['POST', /^\/events\/([^/]+)\/tracks$/, (_m, b) => {
     requireOrganizer()
     const t: Track = { id: id('tr'), event_id: EV, name: b.name, color: b.color ?? '#8b5cf6', sort: tracks.length + 1 }
@@ -573,22 +599,22 @@ const routes: Array<[string, RegExp, Handler]> = [
       track_id: b.track_id ?? (sub?.track ? tracks.find((t) => t.name === sub.track)?.id ?? null : null),
       title: b.title ?? sub?.title ?? null, starts_at: b.starts_at, ends_at: b.ends_at, kind: b.kind ?? 'talk' }
     slots.push(sl)
-    return { slot: sl, conflicts: computeConflicts() }
+    return { ...sl, slots, conflicts: computeConflicts() }
   }],
   ['PATCH', /^\/slots\/([^/]+)$/, (m, b) => {
     requireOrganizer()
     const sl = slots.find((x) => x.id === m[1]); if (!sl) throw new ApiError(404, 'slot not found')
     Object.assign(sl, b)
-    return { slot: sl, conflicts: computeConflicts() }
+    return { ...sl, slots, conflicts: computeConflicts() }
   }],
   ['DELETE', /^\/slots\/([^/]+)$/, (m) => {
     requireOrganizer()
     slots = slots.filter((x) => x.id !== m[1])
-    return { conflicts: computeConflicts() }
+    return { slots, conflicts: computeConflicts() }
   }],
 
   // comms
-  ['GET', /^\/events\/([^/]+)\/templates$/, () => { requireOrganizer(); return templates }],
+  ['GET', /^\/events\/([^/]+)\/templates$/, () => { requireOrganizer(); return { templates } }],
   ['POST', /^\/events\/([^/]+)\/templates$/, (_m, b) => {
     requireOrganizer()
     const t: EmailTemplate = { id: id('tpl'), event_id: EV, key: b.key ?? id('key'), name: b.name ?? 'New template',
@@ -616,22 +642,24 @@ const routes: Array<[string, RegExp, Handler]> = [
         subject: tpl.subject.replace('{{name}}', sp.name).replace('{{talk_title}}', submissions.find((s) => s.speaker_id === sp.id)?.title ?? '').replace('{{due_date}}', 'Oct 1'),
         status: 'sent', provider: 'console', created_at: now() })
     }
-    return { sent: targets.length, skipped: 0, errors: [] }
+    return { requested: targets.length, sent: targets.length, failed: 0, errors: [] }
   }],
   ['GET', /^\/events\/([^/]+)\/emails$/, () => {
     requireOrganizer()
-    return emails.slice().reverse().map((e) => ({
-      ...e,
-      speaker_name: speakers.find((s) => s.id === e.speaker_id)?.name,
-      speaker_email: speakers.find((s) => s.id === e.speaker_id)?.email,
-    }))
+    return {
+      emails: emails.slice().reverse().map((e) => ({
+        ...e,
+        speaker_name: speakers.find((s) => s.id === e.speaker_id)?.name,
+        speaker_email: speakers.find((s) => s.id === e.speaker_id)?.email,
+      })),
+    }
   }],
 
   // dashboard
   ['GET', /^\/events\/([^/]+)\/dashboard$/, () => { requireOrganizer(); return dashboard() }],
 
   // resources
-  ['GET', /^\/events\/([^/]+)\/resources$/, () => { requireOrganizer(); return resources }],
+  ['GET', /^\/events\/([^/]+)\/resources$/, () => { requireOrganizer(); return { resources } }],
   ['POST', /^\/events\/([^/]+)\/resources$/, (_m, b) => {
     requireOrganizer()
     const r: Resource = { id: id('res'), event_id: EV, title: b.title ?? 'Untitled', slug: b.slug ?? id('page'),
@@ -648,12 +676,15 @@ const routes: Array<[string, RegExp, Handler]> = [
   ['DELETE', /^\/resources\/([^/]+)$/, (m) => {
     requireOrganizer()
     const i = resources.findIndex((x) => x.id === m[1]); if (i >= 0) resources.splice(i, 1)
-    return undefined
+    return { ok: true }
   }],
-  ['GET', /^\/public\/events\/([^/]+)\/resources$/, () => resources.filter((r) => r.is_public)],
+  ['GET', /^\/public\/events\/([^/]+)\/resources$/, () => ({
+    event: { name: event.name, slug: event.slug },
+    resources: resources.filter((r) => r.is_public),
+  })],
   ['GET', /^\/public\/events\/([^/]+)\/resources\/([^/]+)$/, (m) => {
     const r = resources.find((x) => x.slug === m[2] && x.is_public); if (!r) throw new ApiError(404, 'not found')
-    return r
+    return { event: { name: event.name, slug: event.slug }, resource: r }
   }],
 
   // public embeds
@@ -665,25 +696,31 @@ const routes: Array<[string, RegExp, Handler]> = [
   })],
   ['GET', /^\/public\/events\/([^/]+)\/schedule$/, () => publicSchedule()],
 
-  // integrations
+  // integrations — masked config, camelCase keys, server's summary shapes
   ['GET', /^\/events\/([^/]+)\/integrations\/([^/]+)$/, (m) => {
     requireOrganizer()
     const st = integrations.get(m[2])
-    return { id: `int_${m[2]}`, event_id: EV, kind: m[2], config_json: st?.config ?? {},
-      last_synced_at: st?.last_synced_at ?? null, last_status: st?.last_status ?? null, configured: !!st }
+    const configured = typeof st?.config.apiKey === 'string' && st.config.apiKey !== ''
+    return { kind: m[2], configured, config: maskConfig(st?.config ?? {}),
+      last_synced_at: st?.last_synced_at ?? null, last_status: st?.last_status ?? null }
   }],
   ['PUT', /^\/events\/([^/]+)\/integrations\/([^/]+)$/, (m, b) => {
     requireOrganizer()
-    integrations.set(m[2], { config: b.config ?? {}, last_synced_at: null, last_status: null })
-    return { id: `int_${m[2]}`, event_id: EV, kind: m[2], config_json: b.config ?? {}, last_synced_at: null, last_status: null, configured: true }
+    const prev = integrations.get(m[2])
+    const merged = { ...(prev?.config ?? {}), ...(b.config ?? {}) }
+    integrations.set(m[2], { config: merged, last_synced_at: prev?.last_synced_at ?? null, last_status: prev?.last_status ?? null })
+    const configured = typeof merged.apiKey === 'string' && merged.apiKey !== ''
+    return { kind: m[2], configured, config: maskConfig(merged) }
   }],
   ['POST', /^\/events\/([^/]+)\/integrations\/([^/]+)\/sync$/, async (m) => {
     requireOrganizer()
     await delay(700)
     const st = integrations.get(m[2])
-    if (!st) return { ok: false, pushed: {}, message: `${m[2]} is not configured — add an API key first (graceful no-op).` }
+    if (!st || !st.config.apiKey) {
+      return { ok: true, skipped: true, reason: 'not configured: no API key set', pushed: 0 }
+    }
     st.last_synced_at = now(); st.last_status = 'ok'
-    return { ok: true, pushed: { speakers: speakers.length, sessions: slots.filter((s) => s.submission_id).length }, message: 'Demo sync complete.' }
+    return { ok: true, pushed: { speakers: speakers.length, sessions: slots.filter((s) => s.submission_id).length } }
   }],
 ]
 

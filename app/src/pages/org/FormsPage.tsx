@@ -128,7 +128,7 @@ function FormBuilder({ form, tracks, onClose, onSaved }: {
     setBusy(true)
     try {
       const updated = await api.updateForm(form.id, { name, spec })
-      onSaved({ ...form, ...updated, name, spec_json: spec })
+      onSaved({ ...form, ...updated, name, spec })
     } finally { setBusy(false) }
   }
 

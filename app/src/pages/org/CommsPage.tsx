@@ -140,8 +140,8 @@ function SendModal({ open, onClose, eventId, tpl }: {
         ...(mode === 'status' ? { filter: { status } } : { speaker_ids: [...picked] }),
         include_ics: includeIcs,
       })
-      toast(`Sent ${res.sent} email${res.sent === 1 ? '' : 's'}${res.errors.length ? ` — ${res.errors.length} failed` : ''}`,
-        { error: res.errors.length > 0 })
+      toast(`Sent ${res.sent}/${res.requested} email${res.requested === 1 ? '' : 's'}${res.failed ? ` — ${res.failed} failed` : ''}`,
+        { error: res.failed > 0 })
       onClose()
     } catch {
       toast('Send failed', { error: true })

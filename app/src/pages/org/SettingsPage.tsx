@@ -22,12 +22,13 @@ export function SettingsPage() {
             </dd>
           </dl>
         </Card>
+        {/* config keys are the backend's canonical camelCase (CONFIG_SCHEMA) */}
         <IntegrationCard eventId={event.id} kind="accelevents" title="Accelevents"
           hint="One-way push of speakers and sessions into your Accelevents event."
-          fields={[{ key: 'api_key', label: 'API key', secret: true }, { key: 'event_id', label: 'Accelevents event ID' }]} />
+          fields={[{ key: 'apiKey', label: 'API key', secret: true }, { key: 'eventId', label: 'Accelevents event ID' }]} />
         <IntegrationCard eventId={event.id} kind="airtable" title="Airtable"
           hint="Mirror speakers, submissions, and schedule into an Airtable base."
-          fields={[{ key: 'api_key', label: 'Personal access token', secret: true }, { key: 'base_id', label: 'Base ID' }]} />
+          fields={[{ key: 'apiKey', label: 'Personal access token', secret: true }, { key: 'baseId', label: 'Base ID' }]} />
       </div>
     </>
   )
@@ -53,9 +54,15 @@ function IntegrationCard({ eventId, kind, title, hint, fields }: {
           setBusy('sync')
           try {
             const res = await api.syncIntegration(eventId, kind)
-            toast(res.ok
-              ? `${title}: ${Object.entries(res.pushed).map(([k, v]) => `${v} ${k}`).join(', ')} pushed`
-              : res.message, { error: !res.ok })
+            const pushedMsg = typeof res.pushed === 'object' && res.pushed
+              ? Object.entries(res.pushed).map(([k, v]) => `${v} ${k}`).join(', ')
+              : String(res.pushed ?? 0)
+            toast(!res.ok
+              ? `${title} sync failed: ${res.error ?? 'unknown error'}`
+              : res.skipped
+                ? `${title}: ${res.reason ?? 'skipped'}`
+                : `${title}: pushed ${pushedMsg}`,
+            { error: !res.ok })
             setInteg(await api.getIntegration(eventId, kind))
           } finally { setBusy(null) }
         }}>Sync now</Button>
