@@ -115,30 +115,36 @@ await check('organizer login works against seeded users (read-only: login + me)'
 });
 
 if (SEED.published && SEED.formId) {
-  await check('CFP submit end-to-end (throwaway speaker)', async () => {
+  await check('CFP submit end-to-end (answers built from the live form spec)', async () => {
+    const specRes = await get(`/api/public/forms/${SEED.formId}`);
+    assert(specRes.status === 200, `form spec fetch: status ${specRes.status}`);
+    const form = JSON.parse(specRes.text)?.form ?? JSON.parse(specRes.text);
+    const fields = form?.spec?.fields ?? [];
+    assert(fields.length > 0, 'form spec has no fields');
+
+    // Fill every required field with a plausible value; reserved ids get real content.
+    // (showIf-hidden fields are filled too — extra answers to visible-if conditions
+    // are harmless; required-if-shown is satisfied either way.)
+    const answers = {
+      title: 'Smoke submission (ignore)',
+      abstract: 'Automated smoke submission — safe to reject.',
+    };
+    for (const f of fields) {
+      if (answers[f.id] !== undefined) continue;
+      if (!f.required) continue;
+      answers[f.id] = Array.isArray(f.options) && f.options.length ? f.options[0] : 'smoke-value';
+    }
+
     const email = `smoke-${Date.now()}@smoke.greenroom.test`;
     const res = await fetch(`${base}/api/public/forms/${SEED.formId}/submit`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        speaker: { email, name: 'Smoke Test' },
-        // pin #2: title lives in answers (server lifts reserved answer ids)
-        answers: {
-          title: 'Smoke submission (ignore)',
-          category: 'Talk',
-          abstract: 'Automated smoke submission — safe to reject.',
-        },
-      }),
+      body: JSON.stringify({ speaker: { email, name: 'Smoke Test' }, answers }),
     });
     assert(res.status < 300, `status ${res.status}: ${await res.text()}`);
   });
-
-  await check('public form spec fetch', async () => {
-    const r = await get(`/api/public/forms/${SEED.formId}`);
-    assert(r.status === 200, `status ${r.status}`);
-  });
 } else {
-  console.log('  ⚠️  seed fixtures not published yet — skipping CFP submit + form spec checks');
+  console.log('  ⚠️  seed fixtures not published yet — skipping CFP submit check');
 }
 
 if (SEED.published && SEED.speakerId && SEED.speakerToken) {

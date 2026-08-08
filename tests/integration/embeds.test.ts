@@ -105,11 +105,18 @@ describe('embed pages', () => {
       const res = await new Client().get(p);
       expect(res.status).toBe(200);
       expect(res.text.length, `${p} exceeds the 30 KB embed budget`).toBeLessThan(30_000);
-      expect(res.text, `${p} references the SPA bundle — not server-rendered`).not.toMatch(
-        /<script[^>]+src=["']\/assets\//i,
-      );
+      // pin #6 + backend contract: fully server-rendered — zero script tags
+      expect(res.text, `${p} contains a <script> — embeds must be script-free`).not.toMatch(/<script\b/i);
+      expect(res.headers.get('cache-control') ?? '').toMatch(/max-age=60/);
       // server-rendered = the event's actual content is already in the HTML
       expect(res.text).toContain(p.includes('speakers') ? acceptedName : 'Accepted talk');
+    }
+  });
+
+  it('public JSON endpoints carry the 60s cache header (pin #6)', async () => {
+    for (const p of [`/api/public/events/${slug}/speakers`, `/api/public/events/${slug}/schedule`]) {
+      const res = await new Client().get(p);
+      expect(res.headers.get('cache-control') ?? '', `${p} missing 60s cache`).toMatch(/max-age=60/);
     }
   });
 });
