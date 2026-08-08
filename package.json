@@ -16,8 +16,9 @@
     "dev:app": "vite",
     "build": "vite build",
     "deploy": "pnpm build && wrangler pages deploy dist --project-name greenroom-dev",
-    "test": "vitest run --passWithNoTests",
-    "test:watch": "vitest",
+    "test": "vitest run -c tests/vitest.config.ts --passWithNoTests",
+    "test:watch": "vitest -c tests/vitest.config.ts",
+    "smoke": "node tests/smoke.mjs",
     "typecheck": "tsc --noEmit",
     "db:migrate:local": "wrangler d1 migrations apply greenroom-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply greenroom-db --remote"
