@@ -3,12 +3,12 @@
 Everything the entry form needs. Target: **Wednesday Aug 12, before 10 PM PT.**
 Submit ONLY after QA's explicit GO on the candidate sha (M5 gate).
 
-> **✅ GATE PASSED — CLEARED TO SUBMIT (2026-08-08, design iteration 2 promoted)**
-> **Deployed artifact**: sha `d0f9bc5` (supersedes 4f73b67, bca6296) — this exact sha's clean-worktree build (bundle `index-m0EY7LQw.js`) is what both URLs below serve, content-hash-verified.
-> **Repo main tip**: ahead of `d0f9bc5` by docs-only and not-yet-gated design commits; the deployed artifact is exactly `d0f9bc5`'s build. Later shas ship only after their own gate (audit + regate + restamp).
-> Immutable deployment: https://158c1823.greenroom-dev.pages.dev (maintainer clean-worktree build of the gated sha)
+> **✅ GATE PASSED — CLEARED TO SUBMIT (2026-08-08, design iteration 3 promoted)**
+> **Deployed artifact**: sha `cd23cef` (supersedes d0f9bc5, 4f73b67, bca6296) — this exact sha's clean-worktree build (bundle `index-Bcx0SNzv.js`) is what both URLs below serve, content-hash-verified. Fixes a judge-visible dashboard horizontal-overflow defect present in d0f9bc5.
+> **Repo main tip**: ahead of `cd23cef` by docs-only commits; the deployed artifact is exactly `cd23cef`'s build. Later shas ship only after their own gate (audit + regate + restamp).
+> Immutable deployment: https://980bbfef.greenroom-dev.pages.dev (maintainer clean-worktree build of the gated sha)
 > Alias: https://greenroom-dev.pages.dev (serving the same deployment)
-> QA GO: quiesced full suite 101 pass / 1 skip / 0 fail on d0f9bc5 + read-only staging leg 18/18 with curated-freshness green + coordinator browser audit PASS (cycle-2 standout: review master/detail)
+> QA GO: quiesced full suite 101 pass / 1 skip / 0 fail on cd23cef + clean-rebuild content-hash identity + zero-external-origin scan + read-only staging leg 18/18 + QA browser pass; coordinator browser audit GREEN (verified: stat-row wrap fix removes the overflow, brand mark, curated counts). Stated limitation: the sub-900px mobile top bar is UI-attested only (QA harness width floor); the portal emoji sweep rests on QA's browser pass + UI review rather than coordinator observation.
 
 ## Form fields
 
