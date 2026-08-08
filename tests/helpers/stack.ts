@@ -14,8 +14,9 @@ const PORT = Number(process.env.TEST_PORT ?? 8788);
 export const BASE_URL = process.env.TEST_BASE_URL ?? `http://127.0.0.1:${PORT}`;
 
 const D1_NAME = process.env.D1_NAME ?? 'greenroom-db';
-// Static dir served by pages dev; app build output if present, else a stub dir.
-const STATIC_DIR = existsSync(join(ROOT, 'app', 'dist')) ? 'app/dist' : 'tests/.static-stub';
+// Static dir served by pages dev: the Vite build output (wrangler.toml
+// pages_build_output_dir = "dist"), else a stub dir so API tests run unbuilt.
+const STATIC_DIR = existsSync(join(ROOT, 'dist')) ? 'dist' : 'tests/.static-stub';
 
 let child: ChildProcess | undefined;
 

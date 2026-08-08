@@ -94,7 +94,7 @@ or `Authorization: Bearer <magic_token>`. Public routes are CORS-open GET.
 ### Forms & submissions
 - `GET/POST /api/events/:eventId/forms` ; `GET/PATCH /api/forms/:formId`
 - `GET  /api/public/forms/:formId` → public form spec (no auth)
-- `POST /api/public/forms/:formId/submit` {speaker:{email,name,bio?}, answers} → creates/updates speaker + submission, applies category routing, emails confirmation + magic link
+- `POST /api/public/forms/:formId/submit` {speaker:{email,name,bio?}, answers} → creates/updates speaker + submission, applies category routing, emails confirmation + magic link. Reserved answer ids (see Pinned decisions #1/#2): `title` (required), `abstract`, `category` are lifted from `answers` into the submission columns — the body stays exactly {speaker, answers}.
 - `GET  /api/events/:eventId/submissions?status=&track=&q=` (organizer)
 - `PATCH /api/submissions/:id` {status?, track?, category?} (organizer)
 
@@ -110,7 +110,7 @@ or `Authorization: Bearer <magic_token>`. Public routes are CORS-open GET.
 - `GET  /api/rounds/:roundId/queue` → submissions + my existing review
 - `POST /api/rounds/:roundId/submissions/:sid/review` {scores_json, comment}
 - `POST /api/rounds/:roundId/submissions/:sid/ai-review` → runs AIReviewer, stores review with ai=1
-- `GET  /api/events/:eventId/leaderboard?round=` → aggregated scores
+- `GET  /api/events/:eventId/leaderboard?round=<roundId>` → aggregated scores; response shape pinned in Pinned decisions #3
 
 ### Schedule
 - `GET/POST /api/events/:eventId/rooms` ; same for `/tracks`
@@ -143,6 +143,34 @@ or `Authorization: Bearer <magic_token>`. Public routes are CORS-open GET.
 
 ### Assets
 - `GET /api/assets/:assetId` → streams from R2 (public for headshots, token/organizer for others)
+
+## Pinned decisions (coordinator, 2026-08-08)
+
+1. **Category derivation on CFP submit.** `submissions.category` = the value in `answers` for the
+   field whose `id` is exactly `'category'`; NULL if the form has no such field or the answer is
+   empty. Routing then applies the FIRST rule in `spec_json.routing` where `whenCategory` equals
+   that value (case-sensitive exact match) and sets `submissions.track` to `assignTrack`.
+   `assignTrack` / `submissions.track` hold the track **name** (denormalized string, not track id);
+   organizers may overwrite via `PATCH /api/submissions/:id`.
+
+2. **Title/abstract on CFP submit.** The public submit body stays exactly `{speaker, answers}` —
+   no top-level `title`. The server lifts reserved answer ids into columns:
+   `answers['title']` → `submissions.title` (400 `{"error":"title required"}` if missing/empty),
+   `answers['abstract']` → `submissions.abstract` (nullable), `answers['category']` → per pin #1.
+   Form builders must include a field with id `'title'` in every CFP form.
+
+3. **Leaderboard response shape.**
+   `GET /api/events/:eventId/leaderboard?round=<roundId>` →
+   `{ round_id, rows: [{ submission_id, title, category, track, speaker_name,
+      review_count, ai_review_count, score }] }`
+   - per-review total = sum of the numeric values in that review's `scores_json`
+   - `score` = mean of per-review totals across ALL reviews in the round (AI reviews included;
+     `ai_review_count` lets the UI qualify), rounded to 2 decimals; `null` when `review_count` is 0
+   - rows sorted `score` DESC with nulls last, tie-break `title` ASC.
+
+4. **Response-object conventions (confirming QA's assumptions).** Organizer create/read responses
+   return the full row with `id` at top level. Organizer submissions list rows include joined
+   `speaker_id`, `speaker_name`, `speaker_email`.
 
 ## Bindings (wrangler.toml names — maintainer owns file, these names are fixed)
 - D1: `DB` (database `greenroom-db`)
