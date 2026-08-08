@@ -56,8 +56,18 @@ pnpm dev:app                  # optional: Vite dev server with HMR at :5173, pro
 | `EMAIL_FROM` | var | From-address for outbound email |
 | `RESEND_API_KEY` | secret (optional) | Send real email via Resend; without it, emails log to console |
 | `ANTHROPIC_API_KEY` | secret (optional) | Enables AI-assisted review; feature reports "not configured" without it |
+| `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` | secrets (optional) | Supabase Storage for file uploads (see Storage options) |
 
 Set secrets with `pnpm exec wrangler pages secret put <NAME> --project-name greenroom-dev`.
+
+### Storage options
+
+File uploads (headshots, slides, documents) work with either backend — the API picks whichever is configured:
+
+- **Cloudflare R2** (preferred): enable R2 on your account, `pnpm exec wrangler r2 bucket create greenroom-files`, and uncomment the `FILES` binding in `wrangler.toml`.
+- **Supabase Storage**: create a Supabase project and set the `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` secrets on the Pages project.
+
+With neither configured, upload routes return a clean `storage_not_configured` error and everything else keeps working.
 
 ## Architecture
 

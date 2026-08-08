@@ -14,9 +14,11 @@ database_name = "greenroom-db"
 database_id = "73dd90b3-ee1c-4497-b389-6b1e50da0412"
 migrations_dir = "db/migrations"
 
-# BLOCKED 2026-08-08: R2 is not enabled on this Cloudflare account (API error 10042).
-# Enable R2 in the dashboard (R2 → purchase/accept terms), then run
-# `pnpm exec wrangler r2 bucket create greenroom-files` and uncomment:
+# CONTRACTS.md pin #7: storage = Supabase for now (SUPABASE_URL / SUPABASE_SERVICE_KEY
+# secrets on the Pages project), R2 later. R2 stayed blocked on account billing (error
+# 10042). When billing unblocks: enable R2 in the dashboard, run
+# `pnpm exec wrangler r2 bucket create greenroom-files`, uncomment the binding below,
+# and redeploy — backend's storage provider selection flips to R2 automatically:
 # [[r2_buckets]]
 # binding = "FILES"
 # bucket_name = "greenroom-files"
