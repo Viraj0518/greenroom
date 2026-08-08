@@ -36,8 +36,14 @@ export interface R2Bucket {
   delete(key: string): Promise<void>
 }
 
+// Workers AI binding (subset we use). Pages [ai] binding named AI.
+export interface WorkersAi {
+  run(model: string, inputs: Record<string, unknown>): Promise<unknown>
+}
+
 export interface Env {
   DB: D1Database
+  AI?: WorkersAi
   // Optional until R2 is enabled on the account (see wrangler.toml); when absent the
   // storage layer falls back to Supabase Storage (pin #7) or 501s cleanly.
   FILES?: R2Bucket

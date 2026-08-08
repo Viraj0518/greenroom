@@ -215,7 +215,18 @@ Storage-dependent routes return 501 `code: "storage_not_configured"` while R2 is
    `greenroom-files`, creds in `~/greenroom/.dev.vars` (gitignored). `assets.r2_key` stays as-is
    and holds the provider-agnostic object key. API surface unchanged.
 
+8. **AI review adapter chain + API docs (coordinator, 2026-08-08).**
+   - `AIReviewer` selection: `ANTHROPIC_API_KEY` present → anthropic (`claude-sonnet-5`);
+     else Workers AI binding `AI` present → workers-ai (`@cf/meta/llama-3.1-8b-instruct`);
+     else 501 "not configured". Response notes which engine produced the review
+     (`reviews.comment` prefixed `[ai:<engine>]` or an `engine` field — backend's pick, but
+     consistent). Workers AI keeps the demo self-contained on Cloudflare (bonus points).
+   - Public API description: `GET /api/openapi.json` (hand-written OpenAPI 3, kept honest against
+     this file) + server-rendered `GET /api/docs` page (pin #6 style: self-contained HTML, no
+     docs-bundle dependency) with auth modes and curl examples.
+
 ## Bindings (wrangler.toml names — maintainer owns file, these names are fixed)
 - D1: `DB` (database `greenroom-db`)
 - R2: `FILES` (bucket `greenroom-files`) — commented out until billing unblocks; see pin #7
+- Workers AI: `AI` — optional, enables the workers-ai reviewer per pin #8
 - Vars/secrets: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` (Pages secrets + .dev.vars), `RESEND_API_KEY?`, `ANTHROPIC_API_KEY?`, `APP_BASE_URL`

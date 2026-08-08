@@ -43,6 +43,7 @@ const SettingsPage = lazy(() => import('./pages/org/SettingsPage').then(load('Se
 export function App() {
   return (
     <Suspense fallback={<Spinner label="Loading…" />}>
+      <DemoChip />
       <Routes>
         <Route path="/" element={<Landing />} />
 

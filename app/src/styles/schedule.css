@@ -50,7 +50,14 @@
 .sched-slot.conflict {
   border-color: var(--danger); border-left-color: var(--danger);
   background: var(--danger-soft);
-  box-shadow: 0 0 0 1px var(--danger);
+  animation: gr-conflict 1.6s ease-in-out infinite;
+}
+@keyframes gr-conflict {
+  0%, 100% { box-shadow: 0 0 0 1px var(--danger); }
+  50% { box-shadow: 0 0 0 3px var(--danger); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sched-slot.conflict { animation: none; box-shadow: 0 0 0 2px var(--danger); }
 }
 .sched-slot .x {
   position: absolute; top: 2px; right: 2px; display: none;

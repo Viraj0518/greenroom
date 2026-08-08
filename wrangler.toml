@@ -3,6 +3,11 @@ name = "greenroom-dev"
 compatibility_date = "2026-08-01"
 pages_build_output_dir = "dist"
 
+# Workers AI: powers the zero-secret AIReviewer fallback (backend picks
+# ANTHROPIC_API_KEY adapter first if set, else Workers AI, else "not configured").
+[ai]
+binding = "AI"
+
 [vars]
 APP_BASE_URL = "https://greenroom-dev.pages.dev"
 EMAIL_FROM = "greenroom@example.com"

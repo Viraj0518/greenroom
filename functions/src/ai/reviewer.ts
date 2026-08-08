@@ -1,4 +1,4 @@
-import type { Env } from '../types'
+import type { Env, WorkersAi } from '../types'
 
 export interface AIReviewInput {
   title: string
@@ -25,6 +25,34 @@ const DEFAULT_CRITERIA = [
   { key: 'originality', label: 'Originality', max: 5 },
 ]
 
+function buildPrompt(input: AIReviewInput, criteria: ReturnType<typeof rubricCriteria>): string {
+  const criteriaText = criteria.map((c) => `- "${c.key}": ${c.label} (integer 1-${c.max})`).join('\n')
+  return [
+    'You are reviewing a conference talk submission. Score it against the rubric and give a short, constructive comment for the review committee (2-4 sentences).',
+    '',
+    `Title: ${input.title}`,
+    `Category: ${input.category ?? 'n/a'}`,
+    `Abstract:\n${input.abstract ?? '(none provided)'}`,
+    '',
+    `Rubric criteria:\n${criteriaText}`,
+    '',
+    'Respond with ONLY a JSON object, no prose around it, shaped exactly like:',
+    `{"scores": {${criteria.map((c) => `"${c.key}": <int>`).join(', ')}}, "comment": "<string>"}`,
+  ].join('\n')
+}
+
+function parseReview(text: string, criteria: ReturnType<typeof rubricCriteria>): AIReviewOutput {
+  const match = text.match(/\{[\s\S]*\}/)
+  if (!match) throw new Error('AI reviewer returned no JSON object')
+  const parsed = JSON.parse(match[0]) as { scores?: Record<string, unknown>; comment?: unknown }
+  const scores: Record<string, number> = {}
+  for (const c of criteria) {
+    const v = Number(parsed.scores?.[c.key])
+    scores[c.key] = Number.isFinite(v) ? Math.max(1, Math.min(c.max, Math.round(v))) : 0
+  }
+  return { scores, comment: typeof parsed.comment === 'string' ? parsed.comment : '' }
+}
+
 function rubricCriteria(rubric: Record<string, unknown> | null) {
   const raw = rubric && Array.isArray((rubric as { criteria?: unknown }).criteria)
     ? ((rubric as { criteria: unknown[] }).criteria as Array<Record<string, unknown>>)
@@ -42,22 +70,6 @@ export function anthropicReviewer(apiKey: string): AIReviewer {
     name: 'anthropic',
     async review(input) {
       const criteria = rubricCriteria(input.rubric)
-      const criteriaText = criteria
-        .map((c) => `- "${c.key}": ${c.label} (integer 1-${c.max})`)
-        .join('\n')
-      const prompt = [
-        'You are reviewing a conference talk submission. Score it against the rubric and give a short, constructive comment for the review committee (2-4 sentences).',
-        '',
-        `Title: ${input.title}`,
-        `Category: ${input.category ?? 'n/a'}`,
-        `Abstract:\n${input.abstract ?? '(none provided)'}`,
-        '',
-        `Rubric criteria:\n${criteriaText}`,
-        '',
-        'Respond with ONLY a JSON object, no prose around it, shaped exactly like:',
-        `{"scores": {${criteria.map((c) => `"${c.key}": <int>`).join(', ')}}, "comment": "<string>"}`,
-      ].join('\n')
-
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -68,7 +80,7 @@ export function anthropicReviewer(apiKey: string): AIReviewer {
         body: JSON.stringify({
           model: 'claude-sonnet-5',
           max_tokens: 1024,
-          messages: [{ role: 'user', content: prompt }],
+          messages: [{ role: 'user', content: buildPrompt(input, criteria) }],
         }),
       })
       if (!res.ok) {
@@ -80,20 +92,35 @@ export function anthropicReviewer(apiKey: string): AIReviewer {
         .filter((b) => b.type === 'text' && typeof b.text === 'string')
         .map((b) => b.text)
         .join('\n')
-      const match = text.match(/\{[\s\S]*\}/)
-      if (!match) throw new Error('AI reviewer returned no JSON object')
-      const parsed = JSON.parse(match[0]) as { scores?: Record<string, unknown>; comment?: unknown }
-      const scores: Record<string, number> = {}
-      for (const c of criteria) {
-        const v = Number(parsed.scores?.[c.key])
-        scores[c.key] = Number.isFinite(v) ? Math.max(1, Math.min(c.max, Math.round(v))) : 0
-      }
-      return { scores, comment: typeof parsed.comment === 'string' ? parsed.comment : '' }
+      return parseReview(text, criteria)
     },
   }
 }
 
-/** Returns the configured reviewer, or null when ANTHROPIC_API_KEY is absent (caller 501s). */
+// Pin #8: secretless demo path via the Workers AI binding — no API key required.
+export function workersAiReviewer(ai: WorkersAi): AIReviewer {
+  return {
+    name: 'workers-ai',
+    async review(input) {
+      const criteria = rubricCriteria(input.rubric)
+      const result = (await ai.run('@cf/meta/llama-3.1-8b-instruct', {
+        messages: [{ role: 'user', content: buildPrompt(input, criteria) }],
+        max_tokens: 800,
+      })) as { response?: string }
+      if (typeof result?.response !== 'string') {
+        throw new Error('Workers AI returned no text response')
+      }
+      return parseReview(result.response, criteria)
+    },
+  }
+}
+
+/**
+ * Selection (pin #8): ANTHROPIC_API_KEY → anthropic; else AI binding → workers-ai;
+ * else null and the caller 501s ai_not_configured.
+ */
 export function getAIReviewer(env: Env): AIReviewer | null {
-  return env.ANTHROPIC_API_KEY ? anthropicReviewer(env.ANTHROPIC_API_KEY) : null
+  if (env.ANTHROPIC_API_KEY) return anthropicReviewer(env.ANTHROPIC_API_KEY)
+  if (env.AI) return workersAiReviewer(env.AI)
+  return null
 }
