@@ -1,16 +1,6 @@
-// Maintainer bootstrap placeholder — backend (tenzinyeshi-34) owns functions/ and should replace this.
-// Contract: single catch-all route delegating to the Hono app in functions/src/.
-import { Hono } from "hono";
-import { handle } from "hono/cloudflare-pages";
+// Cloudflare Pages Functions catch-all: every /api/* request is handled by the Hono app in functions/src/.
 
-type Env = {
-  DB: D1Database;
-  FILES: R2Bucket;
-  APP_BASE_URL: string;
-};
+import { handle } from 'hono/cloudflare-pages'
+import app from '../src'
 
-const app = new Hono<{ Bindings: Env }>().basePath("/api");
-
-app.get("/health", (c) => c.json({ ok: true, service: "greenroom" }));
-
-export const onRequest = handle(app);
+export const onRequest = handle(app)

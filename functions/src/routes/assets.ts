@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import type { AppEnv, Speaker } from '../types'
-import { notFound, forbidden } from '../lib/http'
+import { notFound, forbidden, notConfigured } from '../lib/http'
 import { one } from '../lib/db'
 import { sessionUser, speakerToken } from '../lib/auth'
 
@@ -40,6 +40,7 @@ assets.get('/assets/:assetId', async (c) => {
     }
   }
 
+  if (!c.env.FILES) throw notConfigured('File storage is not configured (R2 binding missing)', 'storage_not_configured')
   const obj = await c.env.FILES.get(asset.r2_key)
   if (!obj) throw notFound('Asset file missing from storage', 'asset_file_missing')
 

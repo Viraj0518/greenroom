@@ -53,7 +53,7 @@ reviews.post('/events/:eventId/rounds', async (c) => {
     body.is_open === false ? 0 : 1
   )
   const row = await one<RoundRow>(c.env.DB, 'SELECT * FROM review_rounds WHERE id = ?', id)
-  return c.json({ round: withRubric(row!) }, 201)
+  return c.json(withRubric(row!), 201)
 })
 
 reviews.patch('/rounds/:roundId', async (c) => {
@@ -85,7 +85,7 @@ reviews.patch('/rounds/:roundId', async (c) => {
     await run(c.env.DB, `UPDATE review_rounds SET ${updates.join(', ')} WHERE id = ?`, ...binds)
   }
   const row = await one<RoundRow>(c.env.DB, 'SELECT * FROM review_rounds WHERE id = ?', id)
-  return c.json({ round: withRubric(row!) })
+  return c.json(withRubric(row!))
 })
 
 // Review queue: reviewable submissions plus the caller's existing review this round.
@@ -147,7 +147,7 @@ reviews.post('/rounds/:roundId/submissions/:sid/review', async (c) => {
     submission.id,
     me.id
   )
-  return c.json({ review: row })
+  return c.json(row)
 })
 
 // AI-assisted review; 501 with a clean message when ANTHROPIC_API_KEY is absent.
@@ -174,100 +174,82 @@ reviews.post('/rounds/:roundId/submissions/:sid/ai-review', async (c) => {
     round.id,
     submission.id
   )
-  return c.json({ review: row })
+  return c.json(row)
 })
 
-// Leaderboard: average total score per submission (optionally scoped to one round).
+// Leaderboard — response shape per Pinned decisions #3:
+// { round_id, rows: [{submission_id, title, category, track, speaker_name,
+//   review_count, ai_review_count, score}] }
+// score = mean of per-review totals (sum of numeric scores_json values), AI included,
+// 2dp, null when 0 reviews; sort score DESC nulls last, tie-break title ASC.
 reviews.get('/events/:eventId/leaderboard', async (c) => {
   const eventId = c.req.param('eventId')
-  const roundId = c.req.query('round')
-  let sql = `SELECT r.id AS review_id, r.round_id, r.submission_id, r.scores_json, r.ai,
-                    s.title, s.status, s.track, s.category, sp.name AS speaker_name
-             FROM reviews r
-             JOIN submissions s ON s.id = r.submission_id
-             JOIN speakers sp ON sp.id = s.speaker_id
+  const roundId = c.req.query('round') || null
+
+  const submissions = await all<{
+    id: string
+    title: string
+    category: string | null
+    track: string | null
+    speaker_name: string
+  }>(
+    c.env.DB,
+    `SELECT s.id, s.title, s.category, s.track, sp.name AS speaker_name
+     FROM submissions s JOIN speakers sp ON sp.id = s.speaker_id
+     WHERE s.event_id = ?`,
+    eventId
+  )
+
+  let sql = `SELECT r.submission_id, r.scores_json, r.ai
+             FROM reviews r JOIN submissions s ON s.id = r.submission_id
              WHERE s.event_id = ?`
   const binds: unknown[] = [eventId]
   if (roundId) {
     sql += ' AND r.round_id = ?'
     binds.push(roundId)
   }
-  const rows = await all<{
-    review_id: string
-    submission_id: string
-    scores_json: string
-    ai: number
-    title: string
-    status: string
-    track: string | null
-    category: string | null
-    speaker_name: string
-  }>(c.env.DB, sql, ...binds)
+  const reviewRows = await all<{ submission_id: string; scores_json: string; ai: number }>(
+    c.env.DB,
+    sql,
+    ...binds
+  )
 
-  const bySubmission = new Map<
-    string,
-    {
-      submission_id: string
-      title: string
-      status: string
-      track: string | null
-      category: string | null
-      speaker_name: string
-      review_count: number
-      ai_review_count: number
-      total: number
-      criteria: Record<string, { total: number; count: number }>
-    }
-  >()
-  for (const row of rows) {
-    let entry = bySubmission.get(row.submission_id)
-    if (!entry) {
-      entry = {
-        submission_id: row.submission_id,
-        title: row.title,
-        status: row.status,
-        track: row.track,
-        category: row.category,
-        speaker_name: row.speaker_name,
-        review_count: 0,
-        ai_review_count: 0,
-        total: 0,
-        criteria: {},
-      }
-      bySubmission.set(row.submission_id, entry)
-    }
-    const scores = parseJson<Record<string, number>>(row.scores_json, {})
+  const agg = new Map<string, { total: number; count: number; aiCount: number }>()
+  for (const r of reviewRows) {
+    const entry = agg.get(r.submission_id) ?? { total: 0, count: 0, aiCount: 0 }
     let reviewTotal = 0
-    for (const [k, v] of Object.entries(scores)) {
-      if (typeof v !== 'number' || !Number.isFinite(v)) continue
-      reviewTotal += v
-      entry.criteria[k] = entry.criteria[k] ?? { total: 0, count: 0 }
-      entry.criteria[k].total += v
-      entry.criteria[k].count += 1
+    for (const v of Object.values(parseJson<Record<string, unknown>>(r.scores_json, {}))) {
+      if (typeof v === 'number' && Number.isFinite(v)) reviewTotal += v
     }
     entry.total += reviewTotal
-    entry.review_count += 1
-    if (row.ai) entry.ai_review_count += 1
+    entry.count += 1
+    if (r.ai) entry.aiCount += 1
+    agg.set(r.submission_id, entry)
   }
 
-  const leaderboard = [...bySubmission.values()]
-    .map((e) => ({
-      submission_id: e.submission_id,
-      title: e.title,
-      speaker_name: e.speaker_name,
-      status: e.status,
-      track: e.track,
-      category: e.category,
-      review_count: e.review_count,
-      ai_review_count: e.ai_review_count,
-      avg_score: e.review_count ? Math.round((e.total / e.review_count) * 100) / 100 : 0,
-      criteria_avg: Object.fromEntries(
-        Object.entries(e.criteria).map(([k, v]) => [k, Math.round((v.total / v.count) * 100) / 100])
-      ),
-    }))
-    .sort((a, b) => b.avg_score - a.avg_score)
+  const rows = submissions
+    .map((s) => {
+      const a = agg.get(s.id)
+      return {
+        submission_id: s.id,
+        title: s.title,
+        category: s.category,
+        track: s.track,
+        speaker_name: s.speaker_name,
+        review_count: a?.count ?? 0,
+        ai_review_count: a?.aiCount ?? 0,
+        score: a && a.count > 0 ? Math.round((a.total / a.count) * 100) / 100 : null,
+      }
+    })
+    .sort((a, b) => {
+      if (a.score === null && b.score === null) return a.title < b.title ? -1 : a.title > b.title ? 1 : 0
+      if (a.score === null) return 1
+      if (b.score === null) return -1
+      if (b.score !== a.score) return b.score - a.score
+      return a.title < b.title ? -1 : a.title > b.title ? 1 : 0
+    })
 
-  return c.json({ leaderboard })
+  return c.json({ round_id: roundId, rows })
 })
 
 // --- helpers ---

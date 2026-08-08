@@ -66,13 +66,13 @@ forms.post('/events/:eventId/forms', requireOrganizer, async (c) => {
     now()
   )
   const row = await one<FormRow>(c.env.DB, 'SELECT * FROM forms WHERE id = ?', id)
-  return c.json({ form: withSpec(row!) }, 201)
+  return c.json(withSpec(row!), 201)
 })
 
 forms.get('/forms/:formId', requireOrganizer, async (c) => {
   const row = await one<FormRow>(c.env.DB, 'SELECT * FROM forms WHERE id = ?', c.req.param('formId'))
   if (!row) throw notFound('Form not found')
-  return c.json({ form: withSpec(row) })
+  return c.json(withSpec(row))
 })
 
 forms.patch('/forms/:formId', requireOrganizer, async (c) => {
@@ -106,7 +106,7 @@ forms.patch('/forms/:formId', requireOrganizer, async (c) => {
     await run(c.env.DB, `UPDATE forms SET ${updates.join(', ')} WHERE id = ?`, ...binds)
   }
   const row = await one<FormRow>(c.env.DB, 'SELECT * FROM forms WHERE id = ?', id)
-  return c.json({ form: withSpec(row!) })
+  return c.json(withSpec(row!))
 })
 
 // --- public form spec + submit ---
@@ -139,10 +139,13 @@ forms.post('/public/forms/:formId/submit', async (c) => {
   const bio = optionalString(speakerIn, 'bio')
   const answers = body.answers && typeof body.answers === 'object' ? body.answers : {}
 
+  // Pinned decision #2: answers['title'] is required; exact error body asserted by QA.
+  // Checked before generic required-field validation so this error wins when title is missing.
+  const title = str(answers.title)
+  if (!title) return c.json({ error: 'title required' }, 400)
+
   const spec = parseJson<FormSpec>(form.spec_json, { fields: [] })
   validateAnswers(spec, answers)
-
-  const title = str(answers.title) ?? '(untitled)'
   const abstract = str(answers.abstract) ?? null
   const category = str(answers.category) ?? null
   const track =
@@ -292,8 +295,13 @@ forms.patch('/submissions/:id', requireOrganizer, async (c) => {
     binds.push(id)
     await run(c.env.DB, `UPDATE submissions SET ${updates.join(', ')} WHERE id = ?`, ...binds)
   }
-  const row = await one<Record<string, unknown>>(c.env.DB, 'SELECT * FROM submissions WHERE id = ?', id)
-  return c.json({ submission: row })
+  const row = await one<Record<string, unknown>>(
+    c.env.DB,
+    `SELECT s.*, sp.name AS speaker_name, sp.email AS speaker_email
+     FROM submissions s JOIN speakers sp ON sp.id = s.speaker_id WHERE s.id = ?`,
+    id
+  )
+  return c.json(row)
 })
 
 // --- helpers ---

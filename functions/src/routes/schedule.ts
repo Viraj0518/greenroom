@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import type { Context } from 'hono'
 import type { AppEnv, D1Database } from '../types'
 import { readJson, requireString, optionalString, badRequest, notFound } from '../lib/http'
 import { all, one, run, uuid } from '../lib/db'
@@ -56,7 +57,7 @@ for (const kind of ['rooms', 'tracks'] as const) {
       )
     }
     const row = await one(c.env.DB, `SELECT * FROM ${kind} WHERE id = ?`, id)
-    return c.json({ [kind.slice(0, -1)]: row }, 201)
+    return c.json(row, 201)
   })
 }
 
@@ -99,7 +100,8 @@ schedule.post('/events/:eventId/schedule/slots', async (c) => {
     ends,
     optionalString(body, 'kind') ?? 'talk'
   )
-  return c.json({ slot_id: id, ...(await schedulePayload(c.env.DB, eventId)) }, 201)
+  const created = await one<Record<string, unknown>>(c.env.DB, 'SELECT * FROM schedule_slots WHERE id = ?', id)
+  return c.json({ ...created, ...(await schedulePayload(c.env.DB, eventId)) }, 201)
 })
 
 schedule.patch('/slots/:slotId', async (c) => {
@@ -126,7 +128,8 @@ schedule.patch('/slots/:slotId', async (c) => {
     binds.push(id)
     await run(c.env.DB, `UPDATE schedule_slots SET ${updates.join(', ')} WHERE id = ?`, ...binds)
   }
-  return c.json(await schedulePayload(c.env.DB, slot.event_id))
+  const updated = await one<Record<string, unknown>>(c.env.DB, 'SELECT * FROM schedule_slots WHERE id = ?', id)
+  return c.json({ ...updated, ...(await schedulePayload(c.env.DB, slot.event_id)) })
 })
 
 schedule.delete('/slots/:slotId', async (c) => {
@@ -163,11 +166,7 @@ function validateTimes(starts: string, ends: string) {
   if (ends <= starts) throw badRequest('ends_at must be after starts_at', 'invalid_time_range')
 }
 
-async function updateSimple(
-  c: Parameters<Parameters<typeof schedule.patch>[1]>[0],
-  table: 'rooms' | 'tracks',
-  fields: readonly string[]
-) {
+async function updateSimple(c: Context<AppEnv>, table: 'rooms' | 'tracks', fields: readonly string[]) {
   const id = c.req.param('id')
   const existing = await one(c.env.DB, `SELECT id FROM ${table} WHERE id = ?`, id)
   if (!existing) throw notFound(`${table.slice(0, -1)} not found`)
@@ -185,14 +184,10 @@ async function updateSimple(
     await run(c.env.DB, `UPDATE ${table} SET ${updates.join(', ')} WHERE id = ?`, ...binds)
   }
   const row = await one(c.env.DB, `SELECT * FROM ${table} WHERE id = ?`, id)
-  return c.json({ [table.slice(0, -1)]: row })
+  return c.json(row)
 }
 
-async function deleteSimple(
-  c: Parameters<Parameters<typeof schedule.delete>[1]>[0],
-  table: 'rooms' | 'tracks',
-  slotFk: 'room_id' | 'track_id'
-) {
+async function deleteSimple(c: Context<AppEnv>, table: 'rooms' | 'tracks', slotFk: 'room_id' | 'track_id') {
   const id = c.req.param('id')
   const existing = await one(c.env.DB, `SELECT id FROM ${table} WHERE id = ?`, id)
   if (!existing) throw notFound(`${table.slice(0, -1)} not found`)

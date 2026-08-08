@@ -44,13 +44,13 @@ events.post('/events', requireOrganizer, async (c) => {
     now()
   )
   const row = await one<EventRow>(c.env.DB, 'SELECT * FROM events WHERE id = ?', id)
-  return c.json({ event: row }, 201)
+  return c.json(row, 201)
 })
 
 events.get('/events/:eventId', requireOrganizer, async (c) => {
   const row = await one<EventRow>(c.env.DB, 'SELECT * FROM events WHERE id = ?', c.req.param('eventId'))
   if (!row) throw notFound('Event not found')
-  return c.json({ event: row })
+  return c.json(row)
 })
 
 events.patch('/events/:eventId', requireOrganizer, async (c) => {
@@ -73,7 +73,7 @@ events.patch('/events/:eventId', requireOrganizer, async (c) => {
     await run(c.env.DB, `UPDATE events SET ${updates.join(', ')} WHERE id = ?`, ...binds)
   }
   const row = await one<EventRow>(c.env.DB, 'SELECT * FROM events WHERE id = ?', id)
-  return c.json({ event: row })
+  return c.json(row)
 })
 
 events.delete('/events/:eventId', requireAdmin, async (c) => {

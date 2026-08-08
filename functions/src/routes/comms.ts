@@ -45,7 +45,7 @@ comms.post('/events/:eventId/templates', async (c) => {
     requireString(body, 'body_md', { max: 50000 })
   )
   const row = await one(c.env.DB, 'SELECT * FROM email_templates WHERE id = ?', id)
-  return c.json({ template: row }, 201)
+  return c.json(row, 201)
 })
 
 comms.patch('/templates/:id', async (c) => {
@@ -67,7 +67,7 @@ comms.patch('/templates/:id', async (c) => {
     await run(c.env.DB, `UPDATE email_templates SET ${updates.join(', ')} WHERE id = ?`, ...binds)
   }
   const row = await one(c.env.DB, 'SELECT * FROM email_templates WHERE id = ?', id)
-  return c.json({ template: row })
+  return c.json(row)
 })
 
 comms.delete('/templates/:id', async (c) => {
@@ -137,7 +137,7 @@ comms.post('/events/:eventId/send', async (c) => {
       ? [
           {
             filename: 'greenroom-schedule.ics',
-            content_b64: btoa(await speakerIcsText(c.env.DB, speaker, event.name)),
+            content_b64: b64Utf8(await speakerIcsText(c.env.DB, speaker, event.name)),
             content_type: 'text/calendar',
           },
         ]
@@ -198,6 +198,14 @@ comms.get('/public/ics/:speakerFile', async (c) => {
     },
   })
 })
+
+// btoa() alone rejects non-Latin1; encode UTF-8 bytes first.
+function b64Utf8(s: string): string {
+  const bytes = new TextEncoder().encode(s)
+  let bin = ''
+  for (const b of bytes) bin += String.fromCharCode(b)
+  return btoa(bin)
+}
 
 async function speakerIcsText(db: D1Database, speaker: Speaker, calendarName: string): Promise<string> {
   const rows = await all<{

@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import type { AppEnv, AssetKind, Speaker } from '../types'
 import { ASSET_KINDS } from '../types'
-import { readJson, optionalString, badRequest, notFound } from '../lib/http'
+import { readJson, optionalString, badRequest, notFound, notConfigured } from '../lib/http'
 import { all, one, run, uuid, now, parseJson } from '../lib/db'
 import { requireSpeaker } from '../lib/auth'
 
@@ -81,6 +81,7 @@ portal.patch('/portal/me', async (c) => {
 
 // Multipart upload: fields `kind` + `file` → R2, registers asset, auto-completes matching task.
 portal.post('/portal/assets', async (c) => {
+  if (!c.env.FILES) throw notConfigured('File storage is not configured (R2 binding missing)', 'storage_not_configured')
   const speaker = c.get('speaker')!
   let form: FormData
   try {
@@ -142,6 +143,7 @@ portal.delete('/portal/assets/:assetId', async (c) => {
     speaker.id
   )
   if (!asset) throw notFound('Asset not found')
+  if (!c.env.FILES) throw notConfigured('File storage is not configured (R2 binding missing)', 'storage_not_configured')
   await c.env.FILES.delete(asset.r2_key)
   await run(c.env.DB, 'DELETE FROM assets WHERE id = ?', asset.id)
   if (asset.kind === 'headshot') {

@@ -38,7 +38,8 @@ export interface R2Bucket {
 
 export interface Env {
   DB: D1Database
-  FILES: R2Bucket
+  // Optional until R2 is enabled on the account (see wrangler.toml); routes 501 cleanly without it.
+  FILES?: R2Bucket
   APP_BASE_URL?: string
   EMAIL_FROM?: string
   RESEND_API_KEY?: string
