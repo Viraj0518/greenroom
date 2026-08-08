@@ -42,10 +42,29 @@ export interface ResourceBody {
 }
 
 const FORCE_MOCKS = import.meta.env.VITE_USE_MOCKS === '1'
+// Lenient no-backend detection (html responses, dead-proxy 5xx) is DEV-only
+// ergonomics. In production the ONLY trigger is a network-level fetch
+// rejection — real API error responses must surface as errors, never be
+// papered over with demo data (coordinator guardrail, 2026-08-08).
+const DEV_FALLBACK = import.meta.env.DEV || FORCE_MOCKS
 let mockActive = FORCE_MOCKS
+
+const mockListeners = new Set<() => void>()
+function activateMocks() {
+  if (!mockActive) {
+    mockActive = true
+    mockListeners.forEach((cb) => cb())
+  }
+}
 
 /** True once any request has been served by the mock store (drives the demo-data chip). */
 export function usingMocks() { return mockActive }
+
+/** Subscribe to mock-mode activation (for the persistent demo chip). Returns unsubscribe. */
+export function onMocksActivated(cb: () => void): () => void {
+  mockListeners.add(cb)
+  return () => { mockListeners.delete(cb) }
+}
 
 let speakerToken: string | null = null
 export function setSpeakerToken(t: string | null) { speakerToken = t }
@@ -55,6 +74,7 @@ type Method = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
 
 async function req<T>(method: Method, path: string, body?: unknown, form?: FormData): Promise<T> {
   if (!mockActive) {
+    let reachedServer = false
     try {
       const headers: Record<string, string> = {}
       if (speakerToken) headers['Authorization'] = `Bearer ${speakerToken}`
@@ -65,10 +85,15 @@ async function req<T>(method: Method, path: string, body?: unknown, form?: FormD
         headers,
         body: form ?? (body !== undefined ? JSON.stringify(body) : undefined),
       })
+      reachedServer = true
       const ct = res.headers.get('content-type') ?? ''
-      // A vite dev server without the API proxy target answers /api/* with the SPA
-      // index.html — treat that exactly like "backend not running".
-      if (ct.includes('text/html')) throw new TypeError('no backend (html response)')
+      // A vite dev server without the API proxy target answers /api/* with the
+      // SPA index.html. In DEV that means "backend not running" → demo data; in
+      // production it's a routing failure and must surface as an error.
+      if (ct.includes('text/html')) {
+        if (DEV_FALLBACK) throw new TypeError('no backend (html response)')
+        throw new ApiError(res.status, 'API unavailable (HTML response)')
+      }
       if (!res.ok) {
         let msg = res.statusText
         let code: string | undefined
@@ -79,18 +104,23 @@ async function req<T>(method: Method, path: string, body?: unknown, form?: FormD
           msg = env.error ?? msg
           code = env.code
         } catch { /* keep statusText */ }
-        // a dead dev proxy answers 5xx text/plain (ECONNREFUSED) — that's "no
-        // backend", not a real API error; real backend errors are JSON envelopes
-        if (!isJson && res.status >= 500) throw new TypeError('no backend (proxy error)')
+        // a dead dev proxy answers 5xx text/plain (ECONNREFUSED); DEV-only leniency —
+        // in production every HTTP error response surfaces as a real error
+        if (!isJson && res.status >= 500 && DEV_FALLBACK) throw new TypeError('no backend (proxy error)')
         throw new ApiError(res.status, msg, code)
       }
       if (res.status === 204) return undefined as T
       return (await res.json()) as T
     } catch (e) {
       if (e instanceof ApiError) throw e
-      // network-level failure → switch this session to mock mode
-      mockActive = true
-      console.info('[greenroom] backend unreachable — using demo data', e)
+      // Fall back to demo data ONLY when the server was never reached (network-
+      // level rejection), or under DEV ergonomics. Anything else re-throws.
+      if (!reachedServer || DEV_FALLBACK) {
+        activateMocks()
+        console.info('[greenroom] backend unreachable — using demo data', e)
+      } else {
+        throw e
+      }
     }
   }
   const { mockRequest } = await import('./mocks')

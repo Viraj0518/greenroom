@@ -1,7 +1,24 @@
-import { Suspense, lazy, type ComponentType } from 'react'
+import { Suspense, lazy, useSyncExternalStore, type ComponentType } from 'react'
 import { Route, Routes, Navigate } from 'react-router-dom'
 import { Landing } from './pages/Landing'
 import { Spinner } from './components/ui'
+import { onMocksActivated, usingMocks } from './api'
+
+/** Persistent, non-dismissable indicator that the UI is running on demo data. */
+function DemoChip() {
+  const active = useSyncExternalStore(onMocksActivated, usingMocks)
+  if (!active) return null
+  return (
+    <div role="status" style={{
+      position: 'fixed', bottom: 14, left: 14, zIndex: 300, pointerEvents: 'none',
+      background: 'var(--warn-soft)', color: 'var(--warn)', border: '1px solid var(--warn)',
+      borderRadius: 999, padding: '3px 12px', fontSize: '0.78rem', fontWeight: 650,
+      boxShadow: 'var(--shadow-2)',
+    }}>
+      ◌ demo data — no live backend
+    </div>
+  )
+}
 
 // Code-split per surface (pinned decision #6): the public CFP form, the speaker
 // portal, and the organizer app each load their own chunk. /embed/* is

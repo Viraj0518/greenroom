@@ -20,9 +20,15 @@ if (!existsSync(indexPath)) {
   process.exit(2);
 }
 const html = readFileSync(indexPath, 'utf8');
-const srcs = [...html.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)].map((m) => m[1]);
+// Count all JS index.html loads eagerly: <script src> AND modulepreload <link href>
+// (Vite emits the latter for code-split chunks — they are initial JS too).
+const srcs = [
+  ...new Set(
+    [...html.matchAll(/<(?:script|link)[^>]+(?:src|href)=["']([^"']+\.js)["']/gi)].map((m) => m[1]),
+  ),
+];
 if (srcs.length === 0) {
-  console.error('no <script src> found in dist/index.html — nothing to measure (is the build real?)');
+  console.error('no JS references found in dist/index.html — nothing to measure (is the build real?)');
   process.exit(1);
 }
 
