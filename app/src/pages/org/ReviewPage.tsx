@@ -1,0 +1,202 @@
+import { useEffect, useMemo, useState } from 'react'
+import { api } from '../../api'
+import { useOrg } from './OrgLayout'
+import type { QueueItem, Review, ReviewRound, Rubric } from '../../types'
+import { asObj, rubric as getRubric } from '../../types'
+import { Badge, Button, Card, EmptyState, Select, Spinner, Textarea, useToast } from '../../components/ui'
+
+export function ReviewPage() {
+  const { event } = useOrg()
+  const [rounds, setRounds] = useState<ReviewRound[] | null>(null)
+  const [roundId, setRoundId] = useState<string>('')
+  const [queue, setQueue] = useState<QueueItem[] | null>(null)
+  const [idx, setIdx] = useState(0)
+
+  useEffect(() => {
+    api.listRounds(event.id).then((rs) => {
+      setRounds(rs)
+      if (rs.length > 0) setRoundId((cur) => cur || rs[0].id)
+    })
+  }, [event.id])
+
+  useEffect(() => {
+    if (!roundId) return
+    setQueue(null)
+    api.reviewQueue(roundId).then((q) => { setQueue(q); setIdx(0) })
+  }, [roundId])
+
+  const round = rounds?.find((r) => r.id === roundId)
+  const rubric = round ? getRubric(round) : { criteria: [] }
+
+  if (!rounds) return <Spinner />
+  if (rounds.length === 0) return <EmptyState glyph="🧮" title="No review rounds yet">Create one from the API or ask an admin.</EmptyState>
+
+  const item = queue?.[idx]
+  const reviewedCount = queue?.filter((i) => i.my_review).length ?? 0
+
+  return (
+    <>
+      <div className="page-title">
+        <h1>Review queue</h1>
+        <div className="row">
+          <Select value={roundId} onChange={(e) => setRoundId(e.target.value)} aria-label="Review round">
+            {rounds.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </Select>
+          {queue && <span className="muted small">{reviewedCount}/{queue.length} reviewed by you</span>}
+        </div>
+      </div>
+
+      {!queue ? <Spinner /> : queue.length === 0 ? (
+        <EmptyState glyph="🎉" title="Queue is empty">Nothing awaiting review in this round.</EmptyState>
+      ) : (
+        <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'minmax(180px, 260px) 1fr', alignItems: 'start' }}>
+          <Card pad={false} className="review-list">
+            <ul style={{ listStyle: 'none', padding: 6, margin: 0, maxHeight: '70vh', overflowY: 'auto' }}>
+              {queue.map((it, i) => (
+                <li key={it.submission.id}>
+                  <button onClick={() => setIdx(i)} style={{
+                    all: 'unset', display: 'block', width: '100%', boxSizing: 'border-box',
+                    padding: '8px 10px', borderRadius: 'var(--r-md)', cursor: 'pointer',
+                    background: i === idx ? 'var(--accent-soft)' : undefined,
+                  }}>
+                    <span className="row" style={{ gap: 7 }}>
+                      <span aria-hidden style={{ color: it.my_review ? 'var(--ok)' : 'var(--faint)', flex: 'none' }}>
+                        {it.my_review ? '✓' : '○'}
+                      </span>
+                      <span className="truncate small" style={{ fontWeight: i === idx ? 640 : 450 }}>
+                        {it.submission.title}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </Card>
+
+          {item && (
+            <ReviewPanel key={item.submission.id} item={item} roundId={roundId} rubric={rubric}
+              onSaved={(rev) => {
+                setQueue((q) => q?.map((x) => (x.submission.id === item.submission.id ? { ...x, my_review: rev } : x)) ?? null)
+                if (idx < queue.length - 1) setIdx(idx + 1)
+              }}
+              onAi={(rev) => {
+                setQueue((q) => q?.map((x) => (x.submission.id === rev.submission_id
+                  ? { ...x, review_count: x.review_count + 1 } : x)) ?? null)
+              }} />
+          )}
+        </div>
+      )}
+    </>
+  )
+}
+
+function ReviewPanel({ item, roundId, rubric, onSaved, onAi }: {
+  item: QueueItem; roundId: string; rubric: Rubric
+  onSaved: (r: Review) => void; onAi: (r: Review) => void
+}) {
+  const toast = useToast()
+  const s = item.submission
+  const existing = item.my_review ? asObj<Record<string, number>>(item.my_review.scores_json, {}) : {}
+  const [scores, setScores] = useState<Record<string, number>>(existing)
+  const [comment, setComment] = useState(item.my_review?.comment ?? '')
+  const [busy, setBusy] = useState(false)
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiReview, setAiReview] = useState<Review | null>(null)
+
+  const total = useMemo(
+    () => rubric.criteria.reduce((a, c) => a + (scores[c.key] ?? 0), 0),
+    [scores, rubric],
+  )
+  const maxTotal = rubric.criteria.reduce((a, c) => a + c.max, 0)
+  const complete = rubric.criteria.every((c) => scores[c.key] != null)
+
+  async function save() {
+    setBusy(true)
+    try {
+      const rev = await api.submitReview(roundId, s.id, { scores_json: scores, comment })
+      toast('Review saved ✓')
+      onSaved(rev)
+    } finally { setBusy(false) }
+  }
+
+  async function runAi() {
+    setAiBusy(true)
+    try {
+      const rev = await api.aiReview(roundId, s.id)
+      setAiReview(rev)
+      onAi(rev)
+      toast('AI review complete')
+    } catch {
+      toast('AI review unavailable — is ANTHROPIC_API_KEY configured?', { error: true })
+    } finally { setAiBusy(false) }
+  }
+
+  return (
+    <div className="stack" style={{ gap: 14 }}>
+      <Card>
+        <div className="spread" style={{ alignItems: 'flex-start' }}>
+          <div>
+            <h2>{s.title}</h2>
+            <p className="muted small" style={{ marginTop: 3 }}>
+              {s.speaker_name}{s.speaker_company ? ` · ${s.speaker_company}` : ''}
+              {s.category ? <> · <Badge>{s.category}</Badge></> : null}
+            </p>
+          </div>
+          <span className="muted small" style={{ flex: 'none' }}>{item.review_count} review{item.review_count === 1 ? '' : 's'}</span>
+        </div>
+        <p style={{ whiteSpace: 'pre-wrap', marginTop: 12 }}>{s.abstract}</p>
+      </Card>
+
+      <Card title="Your score" actions={
+        <span className="muted small">{complete ? `${total}/${maxTotal}` : `${total} so far`}</span>
+      }>
+        <div className="stack" style={{ gap: 14 }}>
+          {rubric.criteria.map((c) => (
+            <div key={c.key} className="spread" style={{ flexWrap: 'wrap' }}>
+              <div>
+                <strong className="small">{c.label}</strong>
+                {c.description && <p className="faint small">{c.description}</p>}
+              </div>
+              <div className="row" style={{ gap: 4 }} role="radiogroup" aria-label={c.label}>
+                {Array.from({ length: c.max }, (_, i) => i + 1).map((v) => (
+                  <button key={v} role="radio" aria-checked={scores[c.key] === v}
+                    onClick={() => setScores((sc) => ({ ...sc, [c.key]: v }))}
+                    style={{
+                      width: 32, height: 32, borderRadius: 'var(--r-sm)', cursor: 'pointer',
+                      border: '1px solid var(--border-strong)',
+                      background: scores[c.key] === v ? 'var(--accent)' : (scores[c.key] ?? 0) >= v ? 'var(--accent-soft)' : 'var(--surface)',
+                      color: scores[c.key] === v ? 'var(--accent-contrast)' : 'var(--text)',
+                      fontWeight: 600,
+                    }}>
+                    {v}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+          <Textarea placeholder="Comments for the program committee (speakers never see these)…"
+            value={comment} onChange={(e) => setComment(e.target.value)} style={{ minHeight: 80 }} />
+          <div className="row-wrap">
+            <Button variant="primary" busy={busy} disabled={!complete} onClick={save}>
+              {item.my_review ? 'Update review' : 'Save & next'}
+            </Button>
+            <Button busy={aiBusy} onClick={runAi} title="Ask the AI reviewer to score this abstract">
+              ✨ Run AI review
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      {aiReview && (
+        <Card title={<span>✨ AI review <Badge tone="badge-accent">ai</Badge></span>}>
+          <div className="row-wrap" style={{ marginBottom: 8 }}>
+            {Object.entries(asObj<Record<string, number>>(aiReview.scores_json, {})).map(([k, v]) => (
+              <Badge key={k}>{k}: {v}</Badge>
+            ))}
+          </div>
+          <p className="small" style={{ whiteSpace: 'pre-wrap' }}>{aiReview.comment}</p>
+        </Card>
+      )}
+    </div>
+  )
+}

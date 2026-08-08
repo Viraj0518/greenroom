@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import type { AppEnv } from '../types'
-import { readJson, requireString, optionalString, notFound } from '../lib/http'
+import { readBody, readJson, requireString, optionalString, notFound } from '../lib/http'
 import { all, one, run, uuid, now } from '../lib/db'
 import { requireOrganizer, requireAdmin } from '../lib/auth'
 
@@ -23,7 +23,7 @@ events.get('/events', requireOrganizer, async (c) => {
 })
 
 events.post('/events', requireOrganizer, async (c) => {
-  const body = await readJson(c.req.raw)
+  const body = await readBody(c.req.raw, ['name', 'slug', 'starts_on', 'ends_on', 'timezone', 'description'])
   const name = requireString(body, 'name', { max: 300 })
   const slug = (optionalString(body, 'slug') ?? name)
     .toLowerCase()
@@ -57,7 +57,7 @@ events.patch('/events/:eventId', requireOrganizer, async (c) => {
   const id = c.req.param('eventId')
   const existing = await one<EventRow>(c.env.DB, 'SELECT * FROM events WHERE id = ?', id)
   if (!existing) throw notFound('Event not found')
-  const body = await readJson(c.req.raw)
+  const body = await readBody(c.req.raw, ['name', 'slug', 'starts_on', 'ends_on', 'timezone', 'description'])
   const fields = ['name', 'slug', 'starts_on', 'ends_on', 'timezone', 'description'] as const
   const updates: string[] = []
   const binds: unknown[] = []

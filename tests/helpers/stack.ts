@@ -5,7 +5,7 @@
  * Used as vitest globalSetup (see tests/vitest.config.ts).
  */
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
-import { rmSync, existsSync, readdirSync, mkdirSync } from 'node:fs';
+import { rmSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ROOT = join(import.meta.dirname ?? __dirname, '..', '..');
@@ -25,22 +25,13 @@ function wrangler(args: string[]) {
 }
 
 function applyDb() {
+  // Migrations only — deliberately NO db/seed.sql here. Integration tests create
+  // all their own data via the API, and an empty users table is what makes the
+  // register-first-user-becomes-admin flow in helpers/api.ts work. Seed data is
+  // for deployed stacks; smoke.mjs asserts against it.
   const migrationsDir = join(ROOT, 'db', 'migrations');
-  if (existsSync(migrationsDir)) {
-    wrangler(['d1', 'migrations', 'apply', D1_NAME, '--local', '--persist-to', STATE_DIR]);
-  } else {
-    // Fallback: apply any .sql files in db/ in name order (schema before seed).
-    const dbDir = join(ROOT, 'db');
-    if (!existsSync(dbDir)) throw new Error('db/ not found — data session has not landed schema yet');
-    for (const f of readdirSync(dbDir).filter((f) => f.endsWith('.sql')).sort()) {
-      wrangler(['d1', 'execute', D1_NAME, '--local', '--persist-to', STATE_DIR, '--file', join('db', f)]);
-    }
-    return;
-  }
-  const seed = join(ROOT, 'db', 'seed.sql');
-  if (existsSync(seed)) {
-    wrangler(['d1', 'execute', D1_NAME, '--local', '--persist-to', STATE_DIR, '--file', 'db/seed.sql']);
-  }
+  if (!existsSync(migrationsDir)) throw new Error('db/migrations not found — data session has not landed schema yet');
+  wrangler(['d1', 'migrations', 'apply', D1_NAME, '--local', '--persist-to', STATE_DIR]);
 }
 
 async function waitForReady(url: string, timeoutMs = 90_000) {

@@ -50,11 +50,12 @@ const CATEGORIES = ['AI & ML', 'Web & Frontend', 'DevOps & Cloud', 'Product & De
 
 const cfpSpec: FormSpec = {
   fields: [
-    { id: 'title', type: 'text', label: 'Talk title', required: true, maps: 'title',
+    // reserved ids title/abstract/category are lifted into submission columns server-side
+    { id: 'title', type: 'text', label: 'Talk title', required: true,
       placeholder: 'A clear, specific title' },
-    { id: 'abstract', type: 'textarea', label: 'Abstract', required: true, maps: 'abstract',
+    { id: 'abstract', type: 'textarea', label: 'Abstract', required: true,
       hint: 'What will the audience learn? 2–4 paragraphs.' },
-    { id: 'category', type: 'select', label: 'Category', required: true, isCategory: true, options: CATEGORIES },
+    { id: 'category', type: 'select', label: 'Category', required: true, options: CATEGORIES },
     { id: 'format', type: 'select', label: 'Format', required: true,
       options: ['Talk (30 min)', 'Workshop (90 min)', 'Lightning (10 min)'] },
     { id: 'workshop_requirements', type: 'textarea', label: 'Workshop requirements',
@@ -301,30 +302,29 @@ function portalMe(): PortalMe {
   }
 }
 
-function leaderboard() {
-  return submissions
-    .map((s) => {
-      const rs = reviews.filter((r) => r.submission_id === s.id)
-      if (rs.length === 0) return null
-      const per: Record<string, number[]> = {}
-      let total = 0, cnt = 0
-      for (const r of rs) {
-        const scores = asObj<Record<string, number>>(r.scores_json, {})
-        for (const [k, v] of Object.entries(scores)) {
-          ;(per[k] ??= []).push(v)
-          total += v; cnt++
-        }
-      }
-      return {
-        submission: joinSub(s),
-        avg_score: cnt ? +(total / cnt).toFixed(2) : 0,
-        review_count: rs.filter((r) => !r.ai).length,
-        ai_review_count: rs.filter((r) => r.ai).length,
-        per_criterion: Object.fromEntries(Object.entries(per).map(([k, vs]) => [k, +(vs.reduce((a, b) => a + b, 0) / vs.length).toFixed(2)])),
-      }
-    })
-    .filter((x): x is NonNullable<typeof x> => x !== null)
-    .sort((a, b) => b.avg_score - a.avg_score)
+// Pinned shape 2026-08-08: score = mean of per-review totals (2dp), null when
+// no reviews; sorted score DESC, nulls last, tie title ASC.
+function leaderboard(roundId: string) {
+  const rows = submissions.map((s) => {
+    const rs = reviews.filter((r) => r.submission_id === s.id && r.round_id === roundId)
+    const totals = rs.map((r) =>
+      Object.values(asObj<Record<string, number>>(r.scores_json, {})).reduce((a, b) => a + b, 0))
+    const sp = speakers.find((x) => x.id === s.speaker_id)
+    return {
+      submission_id: s.id, title: s.title, category: s.category, track: s.track,
+      speaker_name: sp?.name ?? '',
+      review_count: rs.filter((r) => !r.ai).length,
+      ai_review_count: rs.filter((r) => r.ai).length,
+      score: totals.length ? +(totals.reduce((a, b) => a + b, 0) / totals.length).toFixed(2) : null,
+    }
+  })
+  rows.sort((a, b) => {
+    if (a.score == null && b.score == null) return a.title.localeCompare(b.title)
+    if (a.score == null) return 1
+    if (b.score == null) return -1
+    return b.score - a.score || a.title.localeCompare(b.title)
+  })
+  return { round_id: roundId, rows }
 }
 
 function dashboard() {
@@ -403,16 +403,20 @@ const routes: Array<[string, RegExp, Handler]> = [
   ['GET', /^\/events\/([^/]+)\/forms$/, () => { requireOrganizer(); return forms }],
   ['POST', /^\/events\/([^/]+)\/forms$/, (_m, b) => {
     requireOrganizer()
-    const f: FormDef = { id: id('form'), event_id: EV, name: b.name ?? 'Untitled form', is_open: b.is_open ?? 1,
+    const f: FormDef = { id: id('form'), event_id: EV, name: b.name ?? 'Untitled form', is_open: Number(b.is_open ?? 1),
       opens_at: b.opens_at ?? null, closes_at: b.closes_at ?? null,
-      spec_json: b.spec_json ?? { fields: [], routing: [] }, created_at: now() }
+      spec_json: b.spec ?? { fields: [], routing: [] }, created_at: now() }
     forms.push(f); return f
   }],
   ['GET', /^\/forms\/([^/]+)$/, (m) => { requireOrganizer(); const f = forms.find((x) => x.id === m[1]); if (!f) throw new ApiError(404, 'form not found'); return f }],
   ['PATCH', /^\/forms\/([^/]+)$/, (m, b) => {
     requireOrganizer()
     const f = forms.find((x) => x.id === m[1]); if (!f) throw new ApiError(404, 'form not found')
-    Object.assign(f, b); return f
+    const { spec, ...rest } = b
+    Object.assign(f, rest)
+    if (b.is_open !== undefined) f.is_open = Number(b.is_open)
+    if (spec) f.spec_json = spec
+    return f
   }],
   ['GET', /^\/public\/forms\/([^/]+)$/, (m) => {
     const f = forms.find((x) => x.id === m[1]); if (!f) throw new ApiError(404, 'form not found')
@@ -420,7 +424,6 @@ const routes: Array<[string, RegExp, Handler]> = [
   }],
   ['POST', /^\/public\/forms\/([^/]+)\/submit$/, (m, b) => {
     const f = forms.find((x) => x.id === m[1]); if (!f) throw new ApiError(404, 'form not found')
-    const spec = formSpec(f)
     let sp = speakers.find((s) => s.email === b.speaker.email)
     if (!sp) {
       sp = { id: id('sp'), event_id: EV, email: b.speaker.email, name: b.speaker.name, bio: b.speaker.bio ?? null,
@@ -428,14 +431,12 @@ const routes: Array<[string, RegExp, Handler]> = [
       speakers.push(sp)
       speakerTasks.set(sp.id, new Map())
     }
-    const catField = spec.fields.find((x) => x.isCategory)
-    const category = catField ? String(b.answers[catField.id] ?? '') : null
-    const titleField = spec.fields.find((x) => x.maps === 'title')
-    const absField = spec.fields.find((x) => x.maps === 'abstract')
+    // reserved ids lifted from answers into columns (pinned decision 2026-08-08)
+    const category = b.answers.category != null ? String(b.answers.category) : null
     const sub: Submission = {
       id: id('sub'), event_id: EV, form_id: f.id, speaker_id: sp.id,
-      title: String((titleField && b.answers[titleField.id]) ?? 'Untitled'),
-      abstract: String((absField && b.answers[absField.id]) ?? ''),
+      title: String(b.answers.title ?? 'Untitled'),
+      abstract: b.answers.abstract != null ? String(b.answers.abstract) : '',
       category, track: category ? trackForCategory(category) : null,
       answers_json: b.answers, status: 'submitted', created_at: now(),
     }
@@ -539,7 +540,7 @@ const routes: Array<[string, RegExp, Handler]> = [
     }
     reviews.push(r); return r
   }],
-  ['GET', /^\/events\/([^/]+)\/leaderboard(?:\?.*)?$/, () => { requireOrganizer(); return leaderboard() }],
+  ['GET', /^\/events\/([^/]+)\/leaderboard(?:\?round=([^&]+))?$/, (m) => { requireOrganizer(); return leaderboard(m[2] ?? rounds[0].id) }],
 
   // schedule
   ['GET', /^\/events\/([^/]+)\/rooms$/, () => rooms],

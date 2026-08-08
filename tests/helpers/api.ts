@@ -113,8 +113,10 @@ export const CFP_SPEC = {
 
 export async function makeForm(eventId: string, spec: unknown = CFP_SPEC) {
   const org = await organizer();
+  // API takes `spec` as an object (spec_json is the DB column, not the API field) —
+  // backend's implemented reading; pinning requested from coordinator.
   const res = await org.post(`/api/events/${eventId}/forms`, {
-    json: { name: 'CFP', is_open: 1, spec_json: JSON.stringify(spec) },
+    json: { name: 'CFP', is_open: 1, spec },
   });
   if (res.status >= 400) throw new Error(`makeForm failed: ${res.status} ${res.text}`);
   const id = res.body?.id ?? res.body?.form?.id;
@@ -122,18 +124,21 @@ export async function makeForm(eventId: string, spec: unknown = CFP_SPEC) {
   return id as string;
 }
 
-/** Submit a CFP entry as a new speaker; returns the response plus the speaker email used. */
+/**
+ * Submit a CFP entry as a new speaker; returns the response plus the speaker email used.
+ * Pinned contract (coordinator 2026-08-08): body is exactly {speaker, answers}; the server
+ * lifts reserved answer ids — answers.title → submissions.title (required), answers.abstract,
+ * answers.category (drives routing). opts.title is injected into answers.title.
+ */
 export async function submitCfp(formId: string, opts: {
   email?: string; name?: string; title?: string; answers?: Record<string, unknown>;
 } = {}) {
   const email = opts.email ?? `${uniq('speaker')}@example.test`;
+  const answers: Record<string, unknown> = { category: 'Talk', abstract: 'An abstract.', ...opts.answers };
+  if (answers.title === undefined) answers.title = opts.title ?? uniq('Talk title');
   const c = new Client();
   const res = await c.post(`/api/public/forms/${formId}/submit`, {
-    json: {
-      speaker: { email, name: opts.name ?? 'Test Speaker' },
-      title: opts.title ?? uniq('Talk title'),
-      answers: opts.answers ?? { category: 'Talk', abstract: 'An abstract.' },
-    },
+    json: { speaker: { email, name: opts.name ?? 'Test Speaker' }, answers },
   });
   return { res, email };
 }

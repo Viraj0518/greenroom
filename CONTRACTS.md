@@ -82,6 +82,12 @@ IDs: `crypto.randomUUID()`. Times: ISO-8601 UTC strings.
 Auth: organizer routes require session cookie `gr_session`. Speaker routes require `?token=<magic_token>`
 or `Authorization: Bearer <magic_token>`. Public routes are CORS-open GET.
 
+Errors: flat envelope `{"error": "<message>", "code": "<machine_code>"}`; `code` may be omitted
+where a literal is pinned (the title-required 400 is exactly `{"error":"title required"}`).
+Storage-dependent routes return 501 `code: "storage_not_configured"` while R2 is unavailable.
+
+`GET /api/health` → `{"ok":true}` (public).
+
 ### Auth
 - `POST /api/auth/register` {email,name,password} → first user becomes admin; later registrations require admin invite (v1: admin-only creation)
 - `POST /api/auth/login` {email,password} → sets cookie
@@ -113,14 +119,14 @@ or `Authorization: Bearer <magic_token>`. Public routes are CORS-open GET.
 - `GET  /api/events/:eventId/leaderboard?round=<roundId>` → aggregated scores; response shape pinned in Pinned decisions #3
 
 ### Schedule
-- `GET/POST /api/events/:eventId/rooms` ; same for `/tracks`
+- `GET/POST /api/events/:eventId/rooms` ; same for `/tracks` ; plus `PATCH/DELETE /api/rooms/:id` and `/api/tracks/:id`
 - `GET  /api/events/:eventId/schedule` → slots + conflicts[]
 - `POST /api/events/:eventId/schedule/slots` ; `PATCH/DELETE /api/slots/:slotId`
 - Conflict rule (server-computed, returned on every schedule GET/mutation):
   overlap in same room, or same speaker in overlapping slots → `{slotIds, reason}`
 
 ### Comms
-- `GET/POST /api/events/:eventId/templates` ; `PATCH /api/templates/:id`
+- `GET/POST /api/events/:eventId/templates` ; `PATCH/DELETE /api/templates/:id`
 - `POST /api/events/:eventId/send` {template_key, speaker_ids|filter, include_ics?} → renders Markdown + `{{name}}`-style vars, sends, logs
 - `GET  /api/events/:eventId/emails` → log
 - ICS: `GET /api/public/ics/:speakerId.ics?token=` → speaker's accepted+scheduled talks as VEVENTs
@@ -171,6 +177,32 @@ or `Authorization: Bearer <magic_token>`. Public routes are CORS-open GET.
 4. **Response-object conventions (confirming QA's assumptions).** Organizer create/read responses
    return the full row with `id` at top level. Organizer submissions list rows include joined
    `speaker_id`, `speaker_name`, `speaker_email`.
+
+5. **Request-body conventions (systemic — closes the silent-ignore class).**
+   - Structured fields are sent as JSON **objects**, never pre-serialized strings: forms take
+     `spec` (object), reviews take `scores_json` (object value despite the name), integrations
+     take `config` (object). `*_json` string columns are DB-internal serialization only; an API
+     body offering a JSON string where an object is required is a 400.
+   - Boolean-ish body fields (`is_public`, `is_open`, `required`, …) accept `true|false|1|0`
+     and are coerced — `1` MUST behave as `true`.
+   - Unknown or malformed top-level body keys are a 400 `{"error":…,"code":"invalid_body"}`,
+     NEVER silently ignored or merged. Two exceptions: `answers` (free-form, validated against
+     the form's field ids) and nothing else. Integration `config` validates against the
+     per-kind canonical key set — unknown keys rejected, secrets remain write-only and are
+     never echoed under any key name.
+
+6. **Performance directive (operator, 2026-08-08): simple, low-latency, lightweight.**
+   - Public embed pages `/embed/speakers/:slug` and `/embed/schedule/:slug` are **server-rendered
+     HTML from the Hono API** (inline CSS, zero or near-zero JS) — NOT SPA routes. They must not
+     pull the React bundle into an iframe. Backend owns the routes; UI owns their markup/styles
+     (hand off as template functions under app/ that functions/ imports, or coordinate directly).
+   - SPA budget: initial JS ≤ 150 KB gzip; no new runtime deps beyond what's already in
+     package.json without coordinator sign-off; code-split the organizer app from the public/portal
+     surfaces.
+   - API budget: single-digit D1 queries per endpoint (no N+1 loops), p50 < 150 ms at the edge;
+     public GETs keep the 60 s cache headers.
+   - Prefer boring: no client state library, no CSS framework, no ORM. Fetch + React state, hand
+     CSS, prepared statements.
 
 ## Bindings (wrangler.toml names — maintainer owns file, these names are fixed)
 - D1: `DB` (database `greenroom-db`)

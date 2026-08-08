@@ -79,6 +79,41 @@ await check('negative control: unknown slug 404s (server is not blanket-200)', a
   assert(r.status === 404, `expected 404, got ${r.status}`);
 });
 
+await check('seeded keynote speaker appears in public speakers', async () => {
+  const r = await get(`/api/public/events/${SEED.eventSlug}/speakers`);
+  assert(r.text.includes('Priya Raman'), 'seeded accepted keynote speaker missing');
+});
+
+await check('public schedule contains the seeded keynote slot day (2026-10-06)', async () => {
+  const r = await get(`/api/public/events/${SEED.eventSlug}/schedule`);
+  assert(r.status === 200, `status ${r.status}`);
+  assert(r.text.includes('2026-10-06'), 'seeded keynote slot missing from public schedule');
+});
+
+await check('public resources: seeded public pages present, private pc-handbook NOT leaked', async () => {
+  const r = await get(`/api/public/events/${SEED.eventSlug}/resources`);
+  assert(r.status === 200, `status ${r.status}`);
+  // Named positive controls (per data): without these, an everything-private
+  // regression would make the pc-handbook negative read as a pass.
+  assert(r.text.includes('speaker-guide'), 'public resource speaker-guide missing (positive control)');
+  assert(r.text.includes('venue-av'), 'public resource venue-av missing (positive control)');
+  assert(!r.text.includes('pc-handbook'), 'PRIVATE resource pc-handbook leaked on public route');
+});
+
+await check('organizer login works against seeded users (read-only: login + me)', async () => {
+  const res = await fetch(`${base}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: 'admin@example.com', password: 'demo-greenroom-2026' }),
+  });
+  assert(res.status === 200, `login status ${res.status}`);
+  const cookie = (res.headers.get('set-cookie') ?? '').split(';')[0];
+  assert(cookie.startsWith('gr_session='), 'no gr_session cookie set');
+  const me = await get('/api/auth/me', { cookie });
+  assert(me.status === 200, `me status ${me.status}`);
+  assert(me.text.includes('admin@example.com'), 'me does not return the logged-in user');
+});
+
 if (SEED.published && SEED.formId) {
   await check('CFP submit end-to-end (throwaway speaker)', async () => {
     const email = `smoke-${Date.now()}@smoke.greenroom.test`;
@@ -87,8 +122,12 @@ if (SEED.published && SEED.formId) {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         speaker: { email, name: 'Smoke Test' },
-        title: 'Smoke submission (ignore)',
-        answers: { category: 'Talk', abstract: 'Automated smoke submission — safe to reject.' },
+        // pin #2: title lives in answers (server lifts reserved answer ids)
+        answers: {
+          title: 'Smoke submission (ignore)',
+          category: 'Talk',
+          abstract: 'Automated smoke submission — safe to reject.',
+        },
       }),
     });
     assert(res.status < 300, `status ${res.status}: ${await res.text()}`);
@@ -107,6 +146,8 @@ if (SEED.published && SEED.speakerId && SEED.speakerToken) {
     const r = await get(`/api/public/ics/${SEED.speakerId}.ics?token=${encodeURIComponent(SEED.speakerToken)}`);
     assert(r.status === 200, `status ${r.status}`);
     assert(r.text.includes('BEGIN:VCALENDAR') && r.text.includes('BEGIN:VEVENT'), 'not a VEVENT calendar');
+    // seeded keynote slot is 2026-10-06T16:00:00Z
+    assert(/DTSTART[^:]*:20261006T160000Z/.test(r.text), 'keynote DTSTART wrong or missing');
   });
   await check('ICS denies a bad token', async () => {
     const r = await get(`/api/public/ics/${SEED.speakerId}.ics?token=wrong`);

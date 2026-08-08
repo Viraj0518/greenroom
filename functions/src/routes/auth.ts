@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import type { AppEnv } from '../types'
-import { readJson, requireString, badRequest, unauthorized, forbidden } from '../lib/http'
+import { readBody, readJson, requireString, badRequest, unauthorized, forbidden } from '../lib/http'
 import { one, run } from '../lib/db'
 import { hashPassword, verifyPassword } from '../lib/crypto'
 import { createSession, createUser, destroySession, requireOrganizer, sessionUser } from '../lib/auth'
@@ -9,7 +9,7 @@ const auth = new Hono<AppEnv>()
 
 // First registered user becomes admin; after that, only an admin session may create users.
 auth.post('/auth/register', async (c) => {
-  const body = await readJson(c.req.raw)
+  const body = await readBody(c.req.raw, ['email', 'name', 'password', 'role'])
   const email = requireString(body, 'email', { max: 200 }).toLowerCase()
   const name = requireString(body, 'name', { max: 200 })
   const password = requireString(body, 'password', { max: 200 })
@@ -36,7 +36,7 @@ auth.post('/auth/register', async (c) => {
 })
 
 auth.post('/auth/login', async (c) => {
-  const body = await readJson(c.req.raw)
+  const body = await readBody(c.req.raw, ['email', 'password'])
   const email = requireString(body, 'email', { max: 200 }).toLowerCase()
   const password = requireString(body, 'password', { max: 200 })
 

@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import type { Context } from 'hono'
 import type { AppEnv, D1Database } from '../types'
-import { readJson, requireString, optionalString, badRequest, notFound } from '../lib/http'
+import { readBody, requireString, optionalString, badRequest, notFound } from '../lib/http'
 import { all, one, run, uuid } from '../lib/db'
 import { requireOrganizer } from '../lib/auth'
 import { computeConflicts, type SlotForConflicts } from '../lib/conflicts'
@@ -32,7 +32,7 @@ for (const kind of ['rooms', 'tracks'] as const) {
     const eventId = c.req.param('eventId')
     const event = await one(c.env.DB, 'SELECT id FROM events WHERE id = ?', eventId)
     if (!event) throw notFound('Event not found')
-    const body = await readJson(c.req.raw)
+    const body = await readBody(c.req.raw, kind === 'rooms' ? ['name', 'capacity', 'sort'] : ['name', 'color', 'sort'])
     const name = requireString(body, 'name', { max: 200 })
     const id = uuid()
     if (kind === 'rooms') {
@@ -76,7 +76,7 @@ schedule.post('/events/:eventId/schedule/slots', async (c) => {
   const eventId = c.req.param('eventId')
   const event = await one(c.env.DB, 'SELECT id FROM events WHERE id = ?', eventId)
   if (!event) throw notFound('Event not found')
-  const body = await readJson(c.req.raw)
+  const body = await readBody(c.req.raw, ['submission_id', 'room_id', 'track_id', 'title', 'starts_at', 'ends_at', 'kind'])
   const starts = requireString(body, 'starts_at')
   const ends = requireString(body, 'ends_at')
   validateTimes(starts, ends)
@@ -112,7 +112,7 @@ schedule.patch('/slots/:slotId', async (c) => {
     id
   )
   if (!slot) throw notFound('Slot not found')
-  const body = await readJson(c.req.raw)
+  const body = await readBody(c.req.raw, ['submission_id', 'room_id', 'track_id', 'title', 'starts_at', 'ends_at', 'kind'])
   const updates: string[] = []
   const binds: unknown[] = []
   for (const f of ['submission_id', 'room_id', 'track_id', 'title', 'kind', 'starts_at', 'ends_at'] as const) {
@@ -170,7 +170,7 @@ async function updateSimple(c: Context<AppEnv>, table: 'rooms' | 'tracks', field
   const id = c.req.param('id')
   const existing = await one(c.env.DB, `SELECT id FROM ${table} WHERE id = ?`, id)
   if (!existing) throw notFound(`${table.slice(0, -1)} not found`)
-  const body = await readJson(c.req.raw)
+  const body = await readBody(c.req.raw, fields)
   const updates: string[] = []
   const binds: unknown[] = []
   for (const f of fields) {

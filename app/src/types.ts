@@ -46,6 +46,14 @@ export type FieldType =
 
 export interface ShowIf { fieldId: string; op: 'eq' | 'neq' | 'contains' | 'truthy'; value?: unknown }
 
+/**
+ * Reserved field ids (pinned decision 2026-08-08): every form must include a
+ * required field with id 'title'; optional reserved ids 'abstract' and
+ * 'category'. The server lifts these from answers into submission columns,
+ * and 'category' drives track routing.
+ */
+export const RESERVED_FIELD_IDS = ['title', 'abstract', 'category'] as const
+
 export interface FieldSpec {
   id: string
   type: FieldType
@@ -55,10 +63,6 @@ export interface FieldSpec {
   hint?: string
   options?: string[]
   showIf?: ShowIf
-  /** field whose value becomes submissions.category (used by routing) */
-  isCategory?: boolean
-  /** map to submissions.title / abstract */
-  maps?: 'title' | 'abstract'
 }
 
 export interface RoutingRule { whenCategory: string; assignTrack: string }
@@ -131,13 +135,20 @@ export interface Review {
 
 export interface QueueItem { submission: Submission; my_review: Review | null; review_count: number }
 
+// Pinned decision 2026-08-08: rows arrive sorted (score DESC, nulls last,
+// tie title ASC); score = mean of per-review totals, 2dp, null when no reviews.
 export interface LeaderboardRow {
-  submission: Submission
-  avg_score: number
+  submission_id: string
+  title: string
+  category: string | null
+  track: string | null
+  speaker_name: string
   review_count: number
   ai_review_count: number
-  per_criterion: Record<string, number>
+  score: number | null
 }
+
+export interface LeaderboardResponse { round_id: string; rows: LeaderboardRow[] }
 
 // ----- schedule -----
 

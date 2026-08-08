@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import type { AppEnv } from '../types'
-import { readJson, requireString, optionalString, badRequest, notFound } from '../lib/http'
+import { readBody, readJson, requireString, optionalString, optionalFlag, badRequest, notFound } from '../lib/http'
 import { all, one, run, uuid, now } from '../lib/db'
 import { requireOrganizer } from '../lib/auth'
 
@@ -31,7 +31,7 @@ resources.post('/events/:eventId/resources', requireOrganizer, async (c) => {
   const eventId = c.req.param('eventId')
   const event = await one(c.env.DB, 'SELECT id FROM events WHERE id = ?', eventId)
   if (!event) throw notFound('Event not found')
-  const body = await readJson(c.req.raw)
+  const body = await readBody(c.req.raw, ['title', 'slug', 'body_md', 'embed_html', 'is_public', 'sort'])
   const title = requireString(body, 'title', { max: 300 })
   const slug = (optionalString(body, 'slug') ?? title)
     .toLowerCase()
@@ -49,7 +49,7 @@ resources.post('/events/:eventId/resources', requireOrganizer, async (c) => {
     slug,
     optionalString(body, 'body_md') ?? null,
     optionalString(body, 'embed_html') ?? null,
-    body.is_public === true ? 1 : 0,
+    optionalFlag(body, 'is_public') ?? 0,
     typeof body.sort === 'number' ? body.sort : 0,
     now()
   )
@@ -67,7 +67,7 @@ resources.patch('/resources/:id', requireOrganizer, async (c) => {
   const id = c.req.param('id')
   const existing = await one<ResourceRow>(c.env.DB, 'SELECT * FROM resources WHERE id = ?', id)
   if (!existing) throw notFound('Resource not found')
-  const body = await readJson(c.req.raw)
+  const body = await readBody(c.req.raw, ['title', 'slug', 'body_md', 'embed_html', 'is_public', 'sort'])
   const updates: string[] = []
   const binds: unknown[] = []
   for (const f of ['title', 'slug', 'body_md', 'embed_html'] as const) {
@@ -76,9 +76,10 @@ resources.patch('/resources/:id', requireOrganizer, async (c) => {
       binds.push(body[f] === null ? null : optionalString(body, f))
     }
   }
-  if (typeof body.is_public === 'boolean') {
+  const isPublic = optionalFlag(body, 'is_public')
+  if (isPublic !== undefined) {
     updates.push('is_public = ?')
-    binds.push(body.is_public ? 1 : 0)
+    binds.push(isPublic)
   }
   if (typeof body.sort === 'number') {
     updates.push('sort = ?')

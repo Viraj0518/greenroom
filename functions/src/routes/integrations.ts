@@ -1,14 +1,19 @@
 import { Hono } from 'hono'
 import type { AppEnv, D1Database } from '../types'
-import { readJson, badRequest, notFound } from '../lib/http'
+import { readBody, badRequest, notFound } from '../lib/http'
 import { all, one, run, uuid, now, parseJson } from '../lib/db'
 import { requireOrganizer } from '../lib/auth'
 
 const KINDS = ['accelevents', 'airtable'] as const
 type Kind = (typeof KINDS)[number]
 
-// Keys in config_json that are secrets: accepted on PUT, never returned on GET.
-const SECRET_KEYS = ['apiKey', 'api_key', 'token']
+// Canonical config schema per kind (pin #5): config is validated by STRUCTURE, not by
+// probing key names. Unknown keys are 400 — never stored — so a secret can't be smuggled
+// into config_json under a key the masker doesn't inspect. Secrets are write-only.
+const CONFIG_SCHEMA: Record<Kind, Record<string, 'secret' | 'plain'>> = {
+  accelevents: { apiKey: 'secret', eventId: 'plain', baseUrl: 'plain' },
+  airtable: { apiKey: 'secret', baseId: 'plain' },
+}
 
 const integrations = new Hono<AppEnv>()
 
@@ -22,23 +27,35 @@ integrations.get('/events/:eventId/integrations/:kind', async (c) => {
     eventId,
     kind
   )
-  const config = parseJson<Record<string, unknown>>(row?.config_json ?? null, {})
+  const config = sanitizeStored(kind, parseJson<Record<string, unknown>>(row?.config_json ?? null, {}))
   return c.json({
     kind,
-    configured: SECRET_KEYS.some((k) => typeof config[k] === 'string' && config[k] !== ''),
-    config: maskSecrets(config),
+    configured: hasSecret(kind, config),
+    config: maskSecrets(kind, config),
     last_synced_at: row?.last_synced_at ?? null,
     last_status: row?.last_status ?? null,
   })
 })
 
-// Secrets are write-only: omitting (or sending '') a secret key keeps the stored value.
+// Body is {config: {...}} with only canonical keys for the kind; unknown keys are 400.
+// Secrets are write-only: omitting (or sending ''/null for) a secret keeps the stored value.
 integrations.put('/events/:eventId/integrations/:kind', async (c) => {
   const { eventId, kind } = params(c.req.param())
   const event = await one(c.env.DB, 'SELECT id FROM events WHERE id = ?', eventId)
   if (!event) throw notFound('Event not found')
-  const body = await readJson<{ config?: Record<string, unknown> }>(c.req.raw)
-  const incoming = body.config && typeof body.config === 'object' ? body.config : (body as Record<string, unknown>)
+  const body = await readBody(c.req.raw, ['config'])
+  const incoming = body.config
+  if (incoming === null || typeof incoming !== 'object' || Array.isArray(incoming)) {
+    throw badRequest('config must be an object', 'invalid_body')
+  }
+  const schema = CONFIG_SCHEMA[kind]
+  const unknown = Object.keys(incoming).filter((k) => !(k in schema))
+  if (unknown.length) {
+    throw badRequest(
+      `Unknown config keys for ${kind}: ${unknown.join(', ')} (allowed: ${Object.keys(schema).join(', ')})`,
+      'invalid_body'
+    )
+  }
 
   const existing = await one<{ id: string; config_json: string }>(
     c.env.DB,
@@ -46,11 +63,15 @@ integrations.put('/events/:eventId/integrations/:kind', async (c) => {
     eventId,
     kind
   )
-  const stored = parseJson<Record<string, unknown>>(existing?.config_json ?? null, {})
-  const merged: Record<string, unknown> = { ...stored }
-  for (const [k, v] of Object.entries(incoming)) {
-    if (k === 'config') continue
-    if (SECRET_KEYS.includes(k) && (v === '' || v === undefined || v === null)) continue
+  // sanitizeStored also retro-drops any non-canonical keys stored before this validation existed.
+  const merged = sanitizeStored(kind, parseJson<Record<string, unknown>>(existing?.config_json ?? null, {}))
+  for (const [k, v] of Object.entries(incoming as Record<string, unknown>)) {
+    if (v === '' || v === undefined || v === null) {
+      if (schema[k] === 'secret') continue // keep stored secret
+      delete merged[k]
+      continue
+    }
+    if (typeof v !== 'string') throw badRequest(`config.${k} must be a string`, 'invalid_body')
     merged[k] = v
   }
 
@@ -68,8 +89,8 @@ integrations.put('/events/:eventId/integrations/:kind', async (c) => {
   }
   return c.json({
     kind,
-    configured: SECRET_KEYS.some((k) => typeof merged[k] === 'string' && merged[k] !== ''),
-    config: maskSecrets(merged),
+    configured: hasSecret(kind, merged),
+    config: maskSecrets(kind, merged),
   })
 })
 
@@ -88,8 +109,8 @@ integrations.post('/events/:eventId/integrations/:kind/sync', async (c) => {
     eventId,
     kind
   )
-  const config = parseJson<Record<string, unknown>>(row?.config_json ?? null, {})
-  const apiKey = firstSecret(config)
+  const config = sanitizeStored(kind, parseJson<Record<string, unknown>>(row?.config_json ?? null, {}))
+  const apiKey = typeof config.apiKey === 'string' && config.apiKey !== '' ? config.apiKey : null
 
   let summary: Record<string, unknown>
   if (!apiKey) {
@@ -259,20 +280,29 @@ function params(p: Record<string, string>): { eventId: string; kind: Kind } {
   return { eventId: p.eventId, kind }
 }
 
-function maskSecrets(config: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {}
-  for (const [k, v] of Object.entries(config)) {
-    out[k] = SECRET_KEYS.includes(k) ? (v ? '__set__' : undefined) : v
+/** Keep only canonical string-valued keys for the kind; drops anything smuggled in. */
+function sanitizeStored(kind: Kind, config: Record<string, unknown>): Record<string, string> {
+  const schema = CONFIG_SCHEMA[kind]
+  const out: Record<string, string> = {}
+  for (const k of Object.keys(schema)) {
+    const v = config[k]
+    if (typeof v === 'string' && v !== '') out[k] = v
   }
   return out
 }
 
-function firstSecret(config: Record<string, unknown>): string | null {
-  for (const k of SECRET_KEYS) {
-    const v = config[k]
-    if (typeof v === 'string' && v !== '') return v
+/** Structural masking: emit only canonical keys; secret values are never echoed, only a presence marker. */
+function maskSecrets(kind: Kind, config: Record<string, string>): Record<string, string | undefined> {
+  const schema = CONFIG_SCHEMA[kind]
+  const out: Record<string, string | undefined> = {}
+  for (const [k, mode] of Object.entries(schema)) {
+    out[k] = mode === 'secret' ? (config[k] ? '__set__' : undefined) : config[k]
   }
-  return null
+  return out
+}
+
+function hasSecret(kind: Kind, config: Record<string, string>): boolean {
+  return Object.entries(CONFIG_SCHEMA[kind]).some(([k, mode]) => mode === 'secret' && !!config[k])
 }
 
 export default integrations

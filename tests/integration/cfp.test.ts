@@ -3,7 +3,7 @@
  * conditional-logic validation. Contract: CONTRACTS.md "Forms & submissions".
  */
 import { describe, it, expect, beforeAll } from 'vitest';
-import { Client, makeEvent, makeForm, submitCfp, organizer, uniq } from '../helpers/api';
+import { Client, makeEvent, makeForm, submitCfp, organizer, uniq, CFP_SPEC } from '../helpers/api';
 
 let eventId: string;
 let formId: string;
@@ -90,7 +90,8 @@ describe('conditional-logic validation', () => {
   });
 
   it('unconditionally required field missing → 4xx', async () => {
-    const { res } = await submitCfp(formId, { answers: { category: 'Talk' } }); // no abstract
+    // abstract: '' overrides the helper's default answer — blank must fail required validation
+    const { res } = await submitCfp(formId, { answers: { category: 'Talk', abstract: '' } });
     expect(res.status).toBeGreaterThanOrEqual(400);
     expect(res.status).toBeLessThan(500);
   });
@@ -98,5 +99,56 @@ describe('conditional-logic validation', () => {
   it('submitting to a nonexistent form → 404', async () => {
     const { res } = await submitCfp('00000000-0000-4000-8000-00000000dead');
     expect(res.status).toBe(404);
+  });
+
+  it('missing title → exactly the pinned 400 {"error":"title required"}', async () => {
+    const { res } = await submitCfp(formId, { answers: { title: '', category: 'Talk', abstract: 'ok' } });
+    expect(res.status).toBe(400);
+    expect(res.body?.error).toBe('title required');
+  });
+});
+
+describe('form open/closed flag', () => {
+  it('is_open:0 actually closes the form — public submit refused (regression: flag inversion)', async () => {
+    // Backend fixed a latent mirror of the is_public bug where is_open:0 stored as OPEN.
+    const closedFormId = await makeForm(eventId, CFP_SPEC).catch(() => null);
+    const org = await organizer();
+    const res = await org.post(`/api/events/${eventId}/forms`, {
+      json: { name: 'Closed CFP', is_open: 0, spec: CFP_SPEC },
+    });
+    expect(res.status).toBe(201);
+    const closed = res.body?.id;
+    const { res: submit } = await submitCfp(closed);
+    expect(submit.status).toBeGreaterThanOrEqual(400);
+    expect(submit.status).toBeLessThan(500);
+    // positive control: the open form still accepts (closedFormId create also proves is_open:1 path)
+    expect(closedFormId).toBeTruthy();
+    const { res: ok } = await submitCfp(formId);
+    expect(ok.status).toBeLessThan(300);
+  });
+});
+
+describe('pin #5: unknown top-level body keys are 400 invalid_body, never silently ignored', () => {
+  it('forms POST with spec_json (the DB column name) → 400, not an empty-spec form', async () => {
+    // The original footgun: this body used to 201 with a silently-empty spec.
+    const org = await organizer();
+    const res = await org.post(`/api/events/${eventId}/forms`, {
+      json: { name: 'Bad CFP', is_open: 1, spec_json: JSON.stringify(CFP_SPEC) },
+    });
+    expect(res.status).toBe(400);
+    expect(res.body?.code).toBe('invalid_body');
+  });
+
+  it('forms POST with an arbitrary unknown key → 400 invalid_body (canonical body 201s — positive control)', async () => {
+    const org = await organizer();
+    const bad = await org.post(`/api/events/${eventId}/forms`, {
+      json: { name: 'CFP', is_open: 1, spec: CFP_SPEC, totally_unknown_key: 1 },
+    });
+    expect(bad.status).toBe(400);
+    expect(bad.body?.code).toBe('invalid_body');
+    const good = await org.post(`/api/events/${eventId}/forms`, {
+      json: { name: 'CFP ok', is_open: 1, spec: CFP_SPEC },
+    });
+    expect(good.status).toBe(201);
   });
 });

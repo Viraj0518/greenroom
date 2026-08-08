@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import type { AppEnv } from '../types'
-import { readJson, requireString, optionalString, badRequest, notFound, notConfigured } from '../lib/http'
+import { readBody, readJson, requireString, optionalString, optionalFlag, badRequest, notFound, notConfigured } from '../lib/http'
 import { all, one, run, uuid, now, parseJson } from '../lib/db'
 import { requireOrganizer } from '../lib/auth'
 import { getAIReviewer } from '../ai/reviewer'
@@ -34,7 +34,7 @@ reviews.post('/events/:eventId/rounds', async (c) => {
   const eventId = c.req.param('eventId')
   const event = await one(c.env.DB, 'SELECT id FROM events WHERE id = ?', eventId)
   if (!event) throw notFound('Event not found')
-  const body = await readJson(c.req.raw)
+  const body = await readBody(c.req.raw, ['name', 'round_no', 'rubric', 'is_open'])
   const name = requireString(body, 'name', { max: 200 })
   const maxNo = await one<{ n: number | null }>(
     c.env.DB,
@@ -50,7 +50,7 @@ reviews.post('/events/:eventId/rounds', async (c) => {
     name,
     typeof body.round_no === 'number' ? body.round_no : (maxNo?.n ?? 0) + 1,
     body.rubric !== undefined ? JSON.stringify(body.rubric) : null,
-    body.is_open === false ? 0 : 1
+    optionalFlag(body, 'is_open') ?? 1
   )
   const row = await one<RoundRow>(c.env.DB, 'SELECT * FROM review_rounds WHERE id = ?', id)
   return c.json(withRubric(row!), 201)
@@ -60,7 +60,7 @@ reviews.patch('/rounds/:roundId', async (c) => {
   const id = c.req.param('roundId')
   const existing = await one<RoundRow>(c.env.DB, 'SELECT * FROM review_rounds WHERE id = ?', id)
   if (!existing) throw notFound('Round not found')
-  const body = await readJson(c.req.raw)
+  const body = await readBody(c.req.raw, ['name', 'round_no', 'rubric', 'is_open'])
   const updates: string[] = []
   const binds: unknown[] = []
   const name = optionalString(body, 'name')
@@ -72,9 +72,10 @@ reviews.patch('/rounds/:roundId', async (c) => {
     updates.push('round_no = ?')
     binds.push(body.round_no)
   }
-  if (typeof body.is_open === 'boolean') {
+  const isOpenFlag = optionalFlag(body, 'is_open')
+  if (isOpenFlag !== undefined) {
     updates.push('is_open = ?')
-    binds.push(body.is_open ? 1 : 0)
+    binds.push(isOpenFlag)
   }
   if (body.rubric !== undefined) {
     updates.push('rubric_json = ?')
@@ -127,9 +128,12 @@ reviews.post('/rounds/:roundId/submissions/:sid/review', async (c) => {
   const { round, submission } = await loadRoundSubmission(c.env.DB, c.req.param('roundId'), c.req.param('sid'))
   if (!round.is_open) throw badRequest('This round is closed', 'round_closed')
   const me = c.get('user')!
-  const body = await readJson(c.req.raw)
-  const scores = body.scores_json ?? body.scores
-  if (!scores || typeof scores !== 'object') throw badRequest('Missing scores_json', 'missing_scores')
+  const body = await readBody(c.req.raw, ['scores_json', 'comment'])
+  // Pin #5: scores_json arrives in object form; the *_json string shape is DB-internal.
+  const scores = body.scores_json
+  if (!scores || typeof scores !== 'object' || Array.isArray(scores)) {
+    throw badRequest('scores_json must be an object of numeric scores', 'missing_scores')
+  }
   for (const [k, v] of Object.entries(scores as Record<string, unknown>)) {
     if (typeof v !== 'number' || !Number.isFinite(v)) {
       throw badRequest(`Score "${k}" must be a number`, 'invalid_score')

@@ -5,7 +5,7 @@
 
 import type {
   Asset, Conflict, DashboardData, EmailLogRow, EmailTemplate, EventRec, FormDef,
-  Integration, LeaderboardRow, PortalMe, PublicForm, PublicScheduleResponse,
+  Integration, LeaderboardResponse, PortalMe, PublicForm, PublicScheduleResponse,
   PublicSpeakersResponse, QueueItem, Resource, Review, ReviewRound, Room,
   ScheduleResponse, ScheduleSlot, SendResult, Submission, SubmissionStatus,
   SyncResult, Track, User,
@@ -13,10 +13,32 @@ import type {
 
 export class ApiError extends Error {
   status: number
-  constructor(status: number, message: string) {
+  /** machine code from the backend's flat error envelope {error, code} */
+  code?: string
+  constructor(status: number, message: string, code?: string) {
     super(message)
     this.status = status
+    this.code = code
   }
+}
+
+/** Form create/update body (pinned decision #5: `spec` object, whitelisted keys only). */
+export interface FormBody {
+  name?: string
+  is_open?: number | boolean
+  opens_at?: string | null
+  closes_at?: string | null
+  spec?: import('./types').FormSpec
+}
+
+/** Resource create/update body — editable columns only. */
+export interface ResourceBody {
+  title?: string
+  slug?: string
+  body_md?: string
+  embed_html?: string | null
+  is_public?: number | boolean
+  sort?: number
 }
 
 const FORCE_MOCKS = import.meta.env.VITE_USE_MOCKS === '1'
@@ -49,8 +71,18 @@ async function req<T>(method: Method, path: string, body?: unknown, form?: FormD
       if (ct.includes('text/html')) throw new TypeError('no backend (html response)')
       if (!res.ok) {
         let msg = res.statusText
-        try { msg = ((await res.json()) as { error?: string }).error ?? msg } catch { /* keep statusText */ }
-        throw new ApiError(res.status, msg)
+        let code: string | undefined
+        let isJson = false
+        try {
+          const env = (await res.json()) as { error?: string; code?: string }
+          isJson = true
+          msg = env.error ?? msg
+          code = env.code
+        } catch { /* keep statusText */ }
+        // a dead dev proxy answers 5xx text/plain (ECONNREFUSED) — that's "no
+        // backend", not a real API error; real backend errors are JSON envelopes
+        if (!isJson && res.status >= 500) throw new TypeError('no backend (proxy error)')
+        throw new ApiError(res.status, msg, code)
       }
       if (res.status === 204) return undefined as T
       return (await res.json()) as T
@@ -81,10 +113,11 @@ export const api = {
   deleteEvent: (id: string) => req<void>('DELETE', `/events/${id}`),
 
   // ----- forms -----
+  // pinned decision #5: bodies carry `spec` as an OBJECT; no extra top-level keys
   listForms: (eventId: string) => req<FormDef[]>('GET', `/events/${eventId}/forms`),
-  createForm: (eventId: string, b: Partial<FormDef>) => req<FormDef>('POST', `/events/${eventId}/forms`, b),
+  createForm: (eventId: string, b: FormBody) => req<FormDef>('POST', `/events/${eventId}/forms`, b),
   getForm: (formId: string) => req<FormDef>('GET', `/forms/${formId}`),
-  updateForm: (formId: string, b: Partial<FormDef>) => req<FormDef>('PATCH', `/forms/${formId}`, b),
+  updateForm: (formId: string, b: FormBody) => req<FormDef>('PATCH', `/forms/${formId}`, b),
   publicForm: (formId: string) => req<PublicForm>('GET', `/public/forms/${formId}`),
   submitForm: (
     formId: string,
@@ -125,7 +158,7 @@ export const api = {
   aiReview: (roundId: string, sid: string) =>
     req<Review>('POST', `/rounds/${roundId}/submissions/${sid}/ai-review`),
   leaderboard: (eventId: string, round?: string) =>
-    req<LeaderboardRow[]>('GET', `/events/${eventId}/leaderboard${round ? `?round=${round}` : ''}`),
+    req<LeaderboardResponse>('GET', `/events/${eventId}/leaderboard${round ? `?round=${round}` : ''}`),
 
   // ----- schedule -----
   listRooms: (eventId: string) => req<Room[]>('GET', `/events/${eventId}/rooms`),
@@ -155,10 +188,10 @@ export const api = {
 
   // ----- resources -----
   listResources: (eventId: string) => req<Resource[]>('GET', `/events/${eventId}/resources`),
-  createResource: (eventId: string, b: Partial<Resource>) =>
+  createResource: (eventId: string, b: ResourceBody) =>
     req<Resource>('POST', `/events/${eventId}/resources`, b),
   getResource: (id: string) => req<Resource>('GET', `/resources/${id}`),
-  updateResource: (id: string, b: Partial<Resource>) => req<Resource>('PATCH', `/resources/${id}`, b),
+  updateResource: (id: string, b: ResourceBody) => req<Resource>('PATCH', `/resources/${id}`, b),
   deleteResource: (id: string) => req<void>('DELETE', `/resources/${id}`),
   publicResources: (slug: string) => req<Resource[]>('GET', `/public/events/${slug}/resources`),
   publicResource: (slug: string, rslug: string) =>

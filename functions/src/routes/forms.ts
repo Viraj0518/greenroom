@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import type { AppEnv, Speaker } from '../types'
-import { readJson, requireString, optionalString, badRequest, notFound, forbidden } from '../lib/http'
+import { readBody, readJson, requireString, optionalString, optionalFlag, badRequest, notFound, forbidden } from '../lib/http'
 import { all, one, run, uuid, now, parseJson } from '../lib/db'
 import { requireOrganizer } from '../lib/auth'
 import { randomToken } from '../lib/crypto'
@@ -48,7 +48,7 @@ forms.post('/events/:eventId/forms', requireOrganizer, async (c) => {
   const eventId = c.req.param('eventId')
   const event = await one(c.env.DB, 'SELECT id FROM events WHERE id = ?', eventId)
   if (!event) throw notFound('Event not found')
-  const body = await readJson(c.req.raw)
+  const body = await readBody(c.req.raw, ['name', 'spec', 'is_open', 'opens_at', 'closes_at'])
   const name = requireString(body, 'name', { max: 300 })
   const spec = normalizeSpec(body.spec)
   const id = uuid()
@@ -59,7 +59,7 @@ forms.post('/events/:eventId/forms', requireOrganizer, async (c) => {
     id,
     eventId,
     name,
-    body.is_open === false ? 0 : 1,
+    optionalFlag(body, 'is_open') ?? 1,
     optionalString(body, 'opens_at') ?? null,
     optionalString(body, 'closes_at') ?? null,
     JSON.stringify(spec),
@@ -79,7 +79,7 @@ forms.patch('/forms/:formId', requireOrganizer, async (c) => {
   const id = c.req.param('formId')
   const existing = await one<FormRow>(c.env.DB, 'SELECT * FROM forms WHERE id = ?', id)
   if (!existing) throw notFound('Form not found')
-  const body = await readJson(c.req.raw)
+  const body = await readBody(c.req.raw, ['name', 'spec', 'is_open', 'opens_at', 'closes_at'])
   const updates: string[] = []
   const binds: unknown[] = []
   const name = optionalString(body, 'name')
@@ -87,9 +87,10 @@ forms.patch('/forms/:formId', requireOrganizer, async (c) => {
     updates.push('name = ?')
     binds.push(name)
   }
-  if (typeof body.is_open === 'boolean') {
+  const isOpenFlag = optionalFlag(body, 'is_open')
+  if (isOpenFlag !== undefined) {
     updates.push('is_open = ?')
-    binds.push(body.is_open ? 1 : 0)
+    binds.push(isOpenFlag)
   }
   for (const f of ['opens_at', 'closes_at'] as const) {
     if (f in body) {
@@ -130,14 +131,25 @@ forms.post('/public/forms/:formId/submit', async (c) => {
   if (!form) throw notFound('Form not found')
   if (!isOpen(form)) throw forbidden('This form is not accepting submissions', 'form_closed')
 
-  const body = await readJson<{ speaker?: Record<string, unknown>; answers?: Record<string, unknown> }>(c.req.raw)
-  const speakerIn = body.speaker
-  if (!speakerIn || typeof speakerIn !== 'object') throw badRequest('Missing speaker', 'missing_field')
+  // Strict body per pin #5; `answers` is the sole free-form exception (validated against
+  // the form's field spec below).
+  const body = await readBody(c.req.raw, ['speaker', 'answers'])
+  const speakerIn = body.speaker as Record<string, unknown> | undefined
+  if (!speakerIn || typeof speakerIn !== 'object' || Array.isArray(speakerIn)) {
+    throw badRequest('Missing speaker', 'missing_field')
+  }
+  const unknownSpeakerKeys = Object.keys(speakerIn).filter((k) => !['email', 'name', 'bio'].includes(k))
+  if (unknownSpeakerKeys.length) {
+    throw badRequest(`Unknown speaker keys: ${unknownSpeakerKeys.join(', ')}`, 'invalid_body')
+  }
   const email = requireString(speakerIn, 'email', { max: 200 }).toLowerCase()
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw badRequest('Invalid email address', 'invalid_email')
   const name = requireString(speakerIn, 'name', { max: 200 })
   const bio = optionalString(speakerIn, 'bio')
-  const answers = body.answers && typeof body.answers === 'object' ? body.answers : {}
+  const answers: Record<string, unknown> =
+    body.answers && typeof body.answers === 'object' && !Array.isArray(body.answers)
+      ? (body.answers as Record<string, unknown>)
+      : {}
 
   // Pinned decision #2: answers['title'] is required; exact error body asserted by QA.
   // Checked before generic required-field validation so this error wins when title is missing.
@@ -275,7 +287,7 @@ forms.patch('/submissions/:id', requireOrganizer, async (c) => {
   const id = c.req.param('id')
   const existing = await one<{ id: string }>(c.env.DB, 'SELECT id FROM submissions WHERE id = ?', id)
   if (!existing) throw notFound('Submission not found')
-  const body = await readJson(c.req.raw)
+  const body = await readBody(c.req.raw, ['status', 'track', 'category'])
   const updates: string[] = []
   const binds: unknown[] = []
   const status = optionalString(body, 'status')

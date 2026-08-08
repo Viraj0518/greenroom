@@ -97,4 +97,19 @@ describe('embed pages', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type') ?? '').toContain('text/html');
   });
+
+  it('embed pages are server-rendered + self-contained: no SPA bundle, < 30 KB (pin #6)', async () => {
+    // Guards against the SPA-fallback false green: Pages serves index.html with a
+    // 200 for any unknown path, which is HTML but is NOT a server-rendered embed.
+    for (const p of [`/embed/speakers/${slug}`, `/embed/schedule/${slug}`]) {
+      const res = await new Client().get(p);
+      expect(res.status).toBe(200);
+      expect(res.text.length, `${p} exceeds the 30 KB embed budget`).toBeLessThan(30_000);
+      expect(res.text, `${p} references the SPA bundle — not server-rendered`).not.toMatch(
+        /<script[^>]+src=["']\/assets\//i,
+      );
+      // server-rendered = the event's actual content is already in the HTML
+      expect(res.text).toContain(p.includes('speakers') ? acceptedName : 'Accepted talk');
+    }
+  });
 });

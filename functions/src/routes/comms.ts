@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import type { AppEnv, D1Database, Speaker } from '../types'
-import { readJson, requireString, optionalString, badRequest, notFound, unauthorized } from '../lib/http'
+import { readBody, readJson, requireString, optionalString, badRequest, notFound, unauthorized } from '../lib/http'
 import { all, one, run, uuid, now } from '../lib/db'
 import { requireOrganizer } from '../lib/auth'
 import { buildCalendar, type IcsEvent } from '../lib/ics'
@@ -28,7 +28,7 @@ comms.post('/events/:eventId/templates', async (c) => {
   const eventId = c.req.param('eventId')
   const event = await one(c.env.DB, 'SELECT id FROM events WHERE id = ?', eventId)
   if (!event) throw notFound('Event not found')
-  const body = await readJson(c.req.raw)
+  const body = await readBody(c.req.raw, ['key', 'name', 'subject', 'body_md'])
   const key = requireString(body, 'key', { max: 100 })
   if (!/^[a-z0-9_-]+$/.test(key)) throw badRequest('key must be lowercase slug characters', 'invalid_key')
   const dup = await one(c.env.DB, 'SELECT id FROM email_templates WHERE event_id = ? AND key = ?', eventId, key)
@@ -52,7 +52,7 @@ comms.patch('/templates/:id', async (c) => {
   const id = c.req.param('id')
   const existing = await one(c.env.DB, 'SELECT id FROM email_templates WHERE id = ?', id)
   if (!existing) throw notFound('Template not found')
-  const body = await readJson(c.req.raw)
+  const body = await readBody(c.req.raw, ['name', 'subject', 'body_md'])
   const updates: string[] = []
   const binds: unknown[] = []
   for (const f of ['name', 'subject', 'body_md'] as const) {
@@ -85,12 +85,15 @@ comms.post('/events/:eventId/send', async (c) => {
   const eventId = c.req.param('eventId')
   const event = await one<{ id: string; name: string }>(c.env.DB, 'SELECT id, name FROM events WHERE id = ?', eventId)
   if (!event) throw notFound('Event not found')
-  const body = await readJson<{
-    template_key?: string
-    speaker_ids?: unknown
-    filter?: { status?: string }
-    include_ics?: boolean
-  }>(c.req.raw)
+  const raw = await readBody(c.req.raw, ['template_key', 'speaker_ids', 'filter', 'include_ics'])
+  if (raw.filter !== undefined) {
+    if (raw.filter === null || typeof raw.filter !== 'object' || Array.isArray(raw.filter)) {
+      throw badRequest('filter must be an object', 'invalid_body')
+    }
+    const unknown = Object.keys(raw.filter).filter((k) => k !== 'status')
+    if (unknown.length) throw badRequest(`Unknown filter keys: ${unknown.join(', ')}`, 'invalid_body')
+  }
+  const body = raw as { template_key?: unknown; speaker_ids?: unknown; filter?: { status?: string }; include_ics?: unknown }
   const templateKey = typeof body.template_key === 'string' ? body.template_key : ''
   if (!templateKey) throw badRequest('Missing template_key', 'missing_field')
   const template = await one<{ subject: string; body_md: string }>(

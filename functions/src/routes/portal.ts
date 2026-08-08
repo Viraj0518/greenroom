@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import type { AppEnv, AssetKind, Speaker } from '../types'
 import { ASSET_KINDS } from '../types'
-import { readJson, optionalString, badRequest, notFound, notConfigured } from '../lib/http'
+import { readBody, readJson, optionalString, badRequest, notFound, notConfigured } from '../lib/http'
 import { all, one, run, uuid, now, parseJson } from '../lib/db'
 import { requireSpeaker } from '../lib/auth'
 
@@ -51,7 +51,7 @@ portal.get('/portal/me', async (c) => {
 
 portal.patch('/portal/me', async (c) => {
   const speaker = c.get('speaker')!
-  const body = await readJson(c.req.raw)
+  const body = await readBody(c.req.raw, ['name', 'bio', 'tagline', 'company', 'links_json'])
   const updates: string[] = []
   const binds: unknown[] = []
   for (const f of ['name', 'bio', 'tagline', 'company'] as const) {
