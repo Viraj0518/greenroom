@@ -31,7 +31,7 @@ Submit ONLY after QA's explicit GO on the candidate sha (M5 gate).
 - [x] 4. Evaluation — multi-round scoring, rubrics, leaderboard, AI-assisted review
 - [x] 5. Scheduling — drag-and-drop, automatic room/speaker conflict detection
 - [x] 6. Dashboard — real-time speaker onboarding task tracking
-- [x] 7. Accelevents — one-way sync, API-key config, graceful no-op
+- [x] 7. Accelevents — one-way sync, API-key config, graceful no-op (implemented per public API docs; unverified against a live Accelevents account — Airtable mirror, same pattern, is fully verified)
 - [x] 8. Resource pages — wiki + sanitized HTML embeds
 - [x] 9. Public embeds — mobile-friendly, script-free, iframe-safe
 - [x] Bonus: Cloudflare-native (Pages/Functions/D1/Workers AI)

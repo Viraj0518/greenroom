@@ -14,7 +14,7 @@
 | 4 | **Evaluation workflows** — scoring, rounds, AI-assisted review | Multi-round rubric scoring, reviewer queues, aggregated leaderboard, one-click AI review (Claude via `ANTHROPIC_API_KEY`, or zero-config Workers AI fallback). |
 | 5 | **Scheduling** — drag-and-drop with conflict detection | dnd-kit agenda builder across rooms/tracks; server-computed conflicts (room overlap, speaker double-booking) highlighted live. |
 | 6 | **Dashboard** — real-time onboarding tracking | Per-speaker task matrix with counts and overdue flags, driven by portal activity (profile saves and uploads auto-complete tasks). |
-| 7 | **Accelevents integration** — one-way sync | API-key config (write-only secret), push-button sync with result log; graceful no-op without a key. |
+| 7 | **Accelevents integration** — one-way sync | API-key config (write-only secret), push-button sync with result log; graceful no-op without a key. Implemented against Accelevents' public API docs but not yet exercised against a live Accelevents account (the Airtable mirror, same pattern, is fully verified). |
 | 8 | **Resource pages** — wiki with HTML embed | Markdown pages with sanitized custom HTML embeds, public/private flags, public listing per event. |
 | 9 | **Public embeds** — mobile-friendly gallery + schedule | Server-rendered, script-free pages under 30 KB designed for iframes, backed by CORS-open cached JSON endpoints. |
 
