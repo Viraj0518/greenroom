@@ -304,6 +304,8 @@ Next steps:
 2. Complete your onboarding checklist (bio, headshot, slides, AV form)
 3. Watch for your schedule slot — we''ll email you when the agenda goes live
 
+Already scheduled? Add your talk to your calendar: [Google]({{gcal_link}}) · [Outlook]({{outlook_link}}) · [iCal]({{ics_link}})
+
 We can''t wait to have you on stage.
 
 — The {{event_name}} team'),
@@ -330,7 +332,7 @@ Thanks!
 
 The {{event_name}} agenda is live! You''re on at **{{slot_time}}** in **{{room_name}}**.
 
-Your calendar invite is attached (or add it here: {{ics_url}}).
+Add it to your calendar: [Google]({{gcal_link}}) · [Outlook]({{outlook_link}}) · [iCal]({{ics_link}})
 
 Review your session details in the portal: {{portal_url}} — and tell us within 48h if anything looks wrong.
 
