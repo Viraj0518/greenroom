@@ -49,7 +49,7 @@
   --r-xl: 16px;
 
   /* ---- type ---- */
-  --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --track-ls: 0.07em;       /* letter-spacing for uppercase micro-labels */
 
