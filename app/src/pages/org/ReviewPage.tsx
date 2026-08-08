@@ -3,6 +3,7 @@ import { api, ApiError } from '../../api'
 import { useOrg } from './OrgLayout'
 import type { QueueRow, Review, ReviewRound, Rubric } from '../../types'
 import { asObj, rubric as getRubric } from '../../types'
+import { cx } from '../../lib'
 import { Badge, Button, Card, EmptyState, Progress, Select, Spinner, Textarea, useToast } from '../../components/ui'
 
 export function ReviewPage() {
@@ -29,7 +30,7 @@ export function ReviewPage() {
   const rubric = round ? getRubric(round) : { criteria: [] }
 
   if (!rounds) return <Spinner />
-  if (rounds.length === 0) return <EmptyState glyph="🧮" title="No review rounds yet">Create one from the API or ask an admin.</EmptyState>
+  if (rounds.length === 0) return <EmptyState title="No review rounds yet">Create one from the API or ask an admin.</EmptyState>
 
   const item = queue?.[idx]
   const reviewedCount = queue?.filter((i) => i.my_review).length ?? 0
@@ -65,23 +66,19 @@ export function ReviewPage() {
       <div style={{ height: 14 }} />
 
       {!queue ? <Spinner /> : queue.length === 0 ? (
-        <EmptyState glyph="🎉" title="Queue is empty">Nothing awaiting review in this round.</EmptyState>
+        <EmptyState glyph="✓" title="Queue is empty">Nothing awaiting review in this round.</EmptyState>
       ) : (
-        <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'minmax(180px, 260px) 1fr', alignItems: 'start' }}>
+        <div className="review-layout">
           <Card pad={false} className="review-list">
-            <ul style={{ listStyle: 'none', padding: 6, margin: 0, maxHeight: '70vh', overflowY: 'auto' }}>
+            <ul style={{ listStyle: 'none', padding: '6px 0', margin: 0, maxHeight: '70vh', overflowY: 'auto' }}>
               {queue.map((it, i) => (
                 <li key={it.id}>
-                  <button onClick={() => setIdx(i)} style={{
-                    all: 'unset', display: 'block', width: '100%', boxSizing: 'border-box',
-                    padding: '8px 10px', borderRadius: 'var(--r-md)', cursor: 'pointer',
-                    background: i === idx ? 'var(--accent-soft)' : undefined,
-                  }}>
+                  <button onClick={() => setIdx(i)} className={cx('review-item', i === idx && 'sel')}>
                     <span className="row" style={{ gap: 7 }}>
                       <span aria-hidden style={{ color: it.my_review ? 'var(--ok)' : 'var(--faint)', flex: 'none' }}>
                         {it.my_review ? '✓' : '○'}
                       </span>
-                      <span className="truncate small" style={{ fontWeight: i === idx ? 640 : 450 }}>
+                      <span className="truncate small">
                         {it.title}
                       </span>
                     </span>
@@ -184,13 +181,9 @@ function ReviewPanel({ item, roundId, rubric, onSaved }: {
                 {Array.from({ length: c.max }, (_, i) => i + 1).map((v) => (
                   <button key={v} role="radio" aria-checked={scores[c.key] === v}
                     onClick={() => setScores((sc) => ({ ...sc, [c.key]: v }))}
-                    style={{
-                      width: 32, height: 32, borderRadius: 'var(--r-sm)', cursor: 'pointer',
-                      border: '1px solid var(--border-strong)',
-                      background: scores[c.key] === v ? 'var(--accent)' : (scores[c.key] ?? 0) >= v ? 'var(--accent-soft)' : 'var(--surface)',
-                      color: scores[c.key] === v ? 'var(--accent-contrast)' : 'var(--text)',
-                      fontWeight: 600,
-                    }}>
+                    className={cx('score-btn',
+                      scores[c.key] === v && 'on',
+                      (scores[c.key] ?? 0) >= v && 'fill')}>
                     {v}
                   </button>
                 ))}

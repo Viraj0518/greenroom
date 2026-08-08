@@ -53,23 +53,32 @@ export function SubmissionsPage() {
       </div>
 
       <Card pad={false}>
-        <div className="row-wrap" style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
+        <div className="toolbar">
           <Input placeholder="Search title or speaker…" value={q} onChange={(e) => setQ(e.target.value)}
-            style={{ maxWidth: 260 }} aria-label="Search submissions" />
-          <Select value={status} onChange={(e) => setStatus(e.target.value)} style={{ maxWidth: 160 }} aria-label="Filter by status">
+            aria-label="Search submissions" />
+          <Select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Filter by status">
             <option value="">All statuses</option>
             {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
           </Select>
-          <Select value={track} onChange={(e) => setTrack(e.target.value)} style={{ maxWidth: 160 }} aria-label="Filter by track">
+          <Select value={track} onChange={(e) => setTrack(e.target.value)} aria-label="Filter by track">
             <option value="">All tracks</option>
             {tracks.map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
           </Select>
         </div>
 
         {!subs ? <Spinner /> : subs.length === 0 ? (
-          <EmptyState glyph="🔍" title="No submissions match">Adjust the filters or share the CFP link.</EmptyState>
+          status || track || q ? (
+            <EmptyState glyph="○" title="No submissions match these filters"
+              action={<Button onClick={() => { setStatus(''); setTrack(''); setQ('') }}>Clear filters</Button>}>
+              Try a different status, track, or search term.
+            </EmptyState>
+          ) : (
+            <EmptyState title="No submissions yet">
+              Share the CFP form link and proposals will land here.
+            </EmptyState>
+          )
         ) : (
-          <div className="table-wrap">
+          <div className="table-wrap table-tall">
             <table className="gr">
               <thead>
                 <tr>
@@ -86,7 +95,7 @@ export function SubmissionsPage() {
                     <td className="muted small">{fmtDate(s.created_at)}</td>
                     <td onClick={(e) => e.stopPropagation()}>
                       {s.status !== 'accepted' && s.status !== 'rejected' && (
-                        <span className="row" style={{ gap: 6 }}>
+                        <span className="row row-actions" style={{ gap: 6 }}>
                           <Button size="sm" onClick={() => setSubStatus(s, 'accepted')} title="Accept">✓</Button>
                           <Button size="sm" variant="danger" onClick={() => setSubStatus(s, 'rejected')} title="Reject">✕</Button>
                         </span>

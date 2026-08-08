@@ -131,6 +131,8 @@ code, pre { font-family: var(--mono); font-size: 0.88em; }
 
 /* ---------- tables ---------- */
 .table-wrap { overflow-x: auto; }
+/* opt-in vertical scroll container: makes the sticky header real on long lists */
+.table-tall { max-height: 65vh; overflow: auto; }
 table.gr { width: 100%; border-collapse: collapse; font-size: 0.84375rem; }
 table.gr th {
   text-align: left; font-size: 0.6875rem; text-transform: uppercase;
@@ -138,10 +140,31 @@ table.gr th {
   color: var(--muted); font-weight: 600; padding: 8px 12px;
   border-bottom: 1px solid var(--border); white-space: nowrap;
   background: var(--surface);
+  position: sticky; top: 0; z-index: 2;
 }
 table.gr td {
-  padding: 8px 12px; border-bottom: 1px solid var(--border);
+  height: 48px; padding: 6px 12px; border-bottom: 1px solid var(--border);
   vertical-align: middle; font-variant-numeric: tabular-nums;
+}
+/* row actions surface on hover / keyboard focus; always visible on touch */
+.row-actions { opacity: 0; transition: opacity 100ms; }
+tr:hover .row-actions, tr:focus-within .row-actions { opacity: 1; }
+@media (hover: none) { .row-actions { opacity: 1; } }
+
+/* filter row above a table, styled as a distinct toolbar */
+.toolbar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  padding: 10px 16px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+}
+.toolbar .input { max-width: 260px; }
+.toolbar .select { max-width: 160px; }
+.toolbar .input, .toolbar .select { background: var(--surface); }
+@media (max-width: 640px) {
+  .toolbar { flex-direction: column; align-items: stretch; }
+  .toolbar .input, .toolbar .select { max-width: none; }
 }
 table.gr th:first-child, table.gr td:first-child { padding-left: 16px; }
 table.gr th:last-child, table.gr td:last-child { padding-right: 16px; }
@@ -161,6 +184,21 @@ table.gr tbody tr.clickable:hover { background: var(--surface-2); }
 }
 .tab:hover { color: var(--text); }
 .tab[aria-selected="true"] { color: var(--text); font-weight: 600; border-bottom-color: var(--accent); }
+
+/* segmented control — view switchers (distinct from navigation tabs) */
+.tabs.seg {
+  display: inline-flex; gap: 2px; padding: 3px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-bottom: 1px solid var(--border); border-radius: 10px;
+}
+.tabs.seg .tab {
+  margin: 0; padding: 4px 12px; border: none; border-radius: 7px;
+  font-size: 0.8125rem;
+}
+.tabs.seg .tab[aria-selected="true"] {
+  background: var(--surface); color: var(--text);
+  box-shadow: var(--shadow-1), var(--edge);
+}
 
 /* ---------- modal ---------- */
 .modal-backdrop {
@@ -200,12 +238,34 @@ table.gr tbody tr.clickable:hover { background: var(--surface-2); }
   display: flex; flex-direction: column; align-items: center; gap: 4px;
 }
 .empty .glyph {
-  font-size: 1.25rem; width: 44px; height: 44px; margin-bottom: 8px;
+  font-size: 1.375rem; width: 56px; height: 56px; margin-bottom: 12px;
   display: flex; align-items: center; justify-content: center;
+  color: var(--faint);
   background: var(--surface-2); border: 1px dashed var(--border-strong);
-  border-radius: 50%;
+  border-radius: var(--r-lg);
 }
-.empty strong { color: var(--text); font-weight: 600; font-size: 0.9375rem; }
+.empty strong { color: var(--text); font-weight: 600; font-size: 1rem; letter-spacing: -0.01em; }
+.empty .small { max-width: 380px; line-height: 1.55; }
+.empty .empty-action { margin-top: 12px; }
+
+/* public-page shells (CFP form, speaker portal) */
+main.public-shell { max-width: 720px; margin: 0 auto; padding: 32px 16px 80px; }
+main.portal-shell { max-width: 960px; margin: 0 auto; padding: 28px 16px 80px; }
+.shell-foot { text-align: center; margin-top: 40px; }
+
+.cfp-head { margin-bottom: 24px; }
+.cfp-head .brand-dot { display: block; margin-bottom: 14px; }
+.cfp-head .eyebrow { margin-bottom: 6px; color: var(--accent); }
+.cfp-head h1 { font-size: 1.5rem; }
+.cfp-head .form-name { color: var(--muted); font-size: 0.875rem; margin-top: 4px; }
+
+/* portal: content + "Next steps" rail */
+.portal-layout { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) 280px; align-items: start; margin-top: 16px; }
+.portal-rail { position: sticky; top: 24px; }
+@media (max-width: 760px) {
+  .portal-layout { grid-template-columns: 1fr; }
+  .portal-rail { position: static; order: -1; }
+}
 
 .avatar {
   border-radius: 50%;
@@ -252,6 +312,7 @@ table.gr tbody tr.clickable:hover { background: var(--surface-2); }
 
 /* brand mark — CSS stage-light dot, replaces the emoji */
 .brand-dot {
+  display: inline-block;
   width: 12px; height: 12px; border-radius: 50%; flex: none;
   background: radial-gradient(circle at 35% 30%, var(--accent-hover), var(--accent) 60%);
   box-shadow: 0 0 0 3px var(--accent-soft), 0 0 12px var(--accent-glow);

@@ -34,7 +34,14 @@ export function DashboardPage() {
     return [...m.entries()].sort((a, b) => b[1] - a[1])
   }, [subs])
 
-  if (err) return <EmptyState glyph="⚠️" title="Could not load the dashboard">Try reloading.</EmptyState>
+  if (err) {
+    return (
+      <EmptyState glyph="!" title="Could not load the dashboard"
+        action={<Button onClick={() => window.location.reload()}>Reload</Button>}>
+        Something went wrong while fetching event data.
+      </EmptyState>
+    )
+  }
   if (!data) return <Spinner label="Loading dashboard…" />
 
   const tasks = data.tasks ?? []
@@ -46,13 +53,16 @@ export function DashboardPage() {
   const tasksDone = rows.reduce((a, r) => a + r.done_count, 0)
   const tasksTotal = counts.speakers * counts.tasks
 
-  const stats: Array<{ lbl: string; num: number | string; to?: string; danger?: boolean }> = [
-    { lbl: 'Speakers', num: counts.speakers },
+  // Four headline metrics; overdue surfaces as an alert strip only when
+  // nonzero, and raw speaker/task counts live in the onboarding card header.
+  const reviewProgress = submissionsTotal
+    ? `${Math.round(((submissionsTotal - (byStatus.submitted ?? 0)) / submissionsTotal) * 100)}%`
+    : '—'
+  const stats: Array<{ lbl: string; num: number | string; to?: string }> = [
     { lbl: 'Submissions', num: submissionsTotal, to: '/org/submissions' },
     { lbl: 'Accepted', num: byStatus.accepted ?? 0, to: '/org/submissions' },
-    { lbl: 'Onboarding done', num: tasksTotal ? `${Math.round((tasksDone / tasksTotal) * 100)}%` : '—' },
+    { lbl: 'Review progress', num: reviewProgress, to: '/org/review' },
     { lbl: 'Speakers ready', num: `${counts.complete_speakers}/${counts.speakers}` },
-    { lbl: 'Overdue items', num: counts.overdue, danger: counts.overdue > 0 },
   ]
 
   return (
@@ -69,11 +79,21 @@ export function DashboardPage() {
       <div className="stat-grid">
         {stats.map((s) => (
           <div key={s.lbl} className="card stat">
-            <div className="num" style={s.danger ? { color: 'var(--danger)' } : undefined}>{s.num}</div>
+            <div className="num">{s.num}</div>
             <div className="lbl">{s.to ? <Link to={s.to} style={{ color: 'inherit' }}>{s.lbl}</Link> : s.lbl}</div>
           </div>
         ))}
       </div>
+
+      {counts.overdue > 0 && (
+        <div className="alert-strip" role="status">
+          <span className="n">{counts.overdue}</span>
+          <span>
+            overdue onboarding item{counts.overdue === 1 ? '' : 's'} — see the speaker
+            matrix below and send reminders from Comms.
+          </span>
+        </div>
+      )}
 
       <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', marginBottom: 18 }}>
         <Card title="Submission pipeline">
@@ -126,11 +146,19 @@ export function DashboardPage() {
       </div>
 
       <Card title="Speaker onboarding" pad={false}
-        actions={<span className="muted small">{tasksDone}/{tasksTotal} tasks complete</span>}>
+        actions={
+          <span className="muted small">
+            {counts.speakers} speaker{counts.speakers === 1 ? '' : 's'} · {tasksDone}/{tasksTotal} tasks
+            {tasksTotal ? ` · ${Math.round((tasksDone / tasksTotal) * 100)}%` : ''}
+          </span>
+        }>
         {rows.length === 0 ? (
-          <EmptyState glyph="🪑" title="No speakers yet">Accept submissions to start onboarding.</EmptyState>
+          <EmptyState title="No speakers yet"
+            action={<Link className="btn btn-primary" to="/org/submissions">Review submissions</Link>}>
+            Accepting a submission adds its speaker here and starts their onboarding checklist.
+          </EmptyState>
         ) : (
-          <div className="table-wrap">
+          <div className="table-wrap table-tall">
             <table className="gr">
               <thead>
                 <tr>
@@ -189,10 +217,12 @@ export function DashboardPage() {
                     </td>
                     <td>
                       {!row.complete && (
-                        <Button size="sm" title="Send a reminder from Comms"
-                          onClick={() => nav(`/org/comms?speakers=${row.speaker.id}`)}>
-                          Remind
-                        </Button>
+                        <span className="row-actions">
+                          <Button size="sm" title="Send a reminder from Comms"
+                            onClick={() => nav(`/org/comms?speakers=${row.speaker.id}`)}>
+                            Remind
+                          </Button>
+                        </span>
                       )}
                     </td>
                   </tr>

@@ -136,13 +136,13 @@ export function FormPage() {
     }
   }
 
-  if (loadErr) return <PublicShell><EmptyState glyph="🤷" title={loadErr} /></PublicShell>
+  if (loadErr) return <PublicShell><EmptyState glyph="!" title={loadErr} /></PublicShell>
   if (!form) return <PublicShell><Spinner label="Loading form…" /></PublicShell>
 
   if (!form.open) {
     return (
       <PublicShell>
-        <EmptyState glyph="🔒" title="This call for speakers is closed">
+        <EmptyState title="This call for speakers is closed">
           Follow {event?.name ?? 'the event'} for future announcements.
         </EmptyState>
       </PublicShell>
@@ -151,11 +151,11 @@ export function FormPage() {
 
   return (
     <PublicShell>
-      <header style={{ marginBottom: 22 }}>
-        <p className="muted small" style={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-          {event?.name}
-        </p>
-        <h1>{form.name}</h1>
+      <header className="cfp-head">
+        <span className="brand-dot" aria-hidden />
+        <p className="eyebrow">Call for proposals</p>
+        <h1>{event?.name}</h1>
+        <p className="form-name">{form.name}</p>
       </header>
 
       <form onSubmit={submit} noValidate className="stack" style={{ gap: 16 }}>
@@ -237,9 +237,9 @@ export function FormSuccessPage() {
 
 function PublicShell({ children }: { children: React.ReactNode }) {
   return (
-    <main style={{ maxWidth: 640, margin: '0 auto', padding: '32px 16px 80px' }}>
+    <main className="public-shell">
       {children}
-      <footer className="faint small" style={{ textAlign: 'center', marginTop: 40 }}>
+      <footer className="shell-foot faint small">
         Powered by <Link to="/">GreenRoom</Link>
       </footer>
     </main>

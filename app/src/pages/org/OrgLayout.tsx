@@ -41,6 +41,7 @@ export function OrgLayout() {
   const nav = useNavigate()
   const [state, setState] = useState<OrgCtxValue | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  const [navOpen, setNavOpen] = useState(false) // mobile drawer, presentational only
 
   useEffect(() => {
     let alive = true
@@ -64,28 +65,34 @@ export function OrgLayout() {
   return (
     <OrgCtx.Provider value={state}>
       <div className="org">
-        <aside className="org-side">
+        <aside className={`org-side${navOpen ? ' nav-open' : ''}`}>
           <Link to="/" className="org-brand"><span className="brand-dot" aria-hidden /> GreenRoom</Link>
-          <nav className="org-nav">
-            {NAV.map((n) => (
-              <span key={n.to} style={{ display: 'contents' }}>
-                {n.section && <span className="org-nav-label" aria-hidden>{n.section}</span>}
-                <NavLink to={n.to} end={n.end as boolean | undefined}
-                  className={({ isActive }) => (isActive ? 'active' : undefined)}>
-                  <span className="glyph" aria-hidden>{n.glyph}</span>
-                  {n.label}
-                </NavLink>
-              </span>
-            ))}
-          </nav>
-          <div className="org-side-meta">
-            {usingMocks() && <Badge tone="badge-warn">demo data</Badge>}
-            <span className="small muted truncate" title={state.user.email}>{state.user.name}</span>
-            <div className="row">
-              <Button size="sm" variant="ghost" onClick={toggleTheme} title="Toggle theme">◐</Button>
-              <Button size="sm" variant="ghost" onClick={async () => { await api.logout(); nav('/org/login') }}>
-                Sign out
-              </Button>
+          <button className="org-menu" aria-label="Toggle navigation" aria-expanded={navOpen}
+            onClick={() => setNavOpen((o) => !o)}>
+            {navOpen ? '✕' : '☰'}
+          </button>
+          <div className="org-drawer">
+            <nav className="org-nav" onClick={() => setNavOpen(false)}>
+              {NAV.map((n) => (
+                <span key={n.to} style={{ display: 'contents' }}>
+                  {n.section && <span className="org-nav-label" aria-hidden>{n.section}</span>}
+                  <NavLink to={n.to} end={n.end as boolean | undefined}
+                    className={({ isActive }) => (isActive ? 'active' : undefined)}>
+                    <span className="glyph" aria-hidden>{n.glyph}</span>
+                    {n.label}
+                  </NavLink>
+                </span>
+              ))}
+            </nav>
+            <div className="org-side-meta">
+              {usingMocks() && <Badge tone="badge-warn">demo data</Badge>}
+              <span className="small muted truncate" title={state.user.email}>{state.user.name}</span>
+              <div className="row">
+                <Button size="sm" variant="ghost" onClick={toggleTheme} title="Toggle theme">◐</Button>
+                <Button size="sm" variant="ghost" onClick={async () => { await api.logout(); nav('/org/login') }}>
+                  Sign out
+                </Button>
+              </div>
             </div>
           </div>
         </aside>

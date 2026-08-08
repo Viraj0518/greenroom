@@ -155,7 +155,7 @@ export function SchedulePage() {
       )}
 
       <div className="row-wrap" style={{ marginBottom: 12 }}>
-        <Tabs value={view} onChange={setView} tabs={[
+        <Tabs className="seg" value={view} onChange={setView} tabs={[
           { key: 'list', label: 'List' },
           { key: 'day', label: 'Day' },
           { key: 'week', label: 'Week' },
@@ -182,7 +182,7 @@ export function SchedulePage() {
         <div className="sched-layout">
           <Card title={`Unscheduled (${tray.length})`} pad={false}>
             <div className="sched-tray-list">
-              {tray.length === 0 && <p className="muted small" style={{ padding: 10 }}>All accepted talks are scheduled 🎉</p>}
+              {tray.length === 0 && <p className="muted small" style={{ padding: 10 }}>All accepted talks are scheduled ✓</p>}
               {tray.map((s) => <TrayChip key={s.id} sub={s} color={trackByName(s.track)?.color} />)}
             </div>
           </Card>
@@ -253,12 +253,12 @@ export function SchedulePage() {
 
       <DragOverlay dropAnimation={null}>
         {dragging?.kind === 'sub' && dragging.submission && (
-          <div className="sched-chip" style={{ ['--track' as string]: trackByName(dragging.submission.track)?.color }}>
+          <div className="sched-chip lift" style={{ ['--track' as string]: trackByName(dragging.submission.track)?.color }}>
             <strong>{dragging.submission.title}</strong>
           </div>
         )}
         {dragging?.kind === 'slot' && dragging.slot && (
-          <div className="sched-chip" style={{ ['--track' as string]: trackById(dragging.slot.track_id)?.color }}>
+          <div className="sched-chip lift" style={{ ['--track' as string]: trackById(dragging.slot.track_id)?.color }}>
             <strong>{titleOf(dragging.slot)}</strong>
           </div>
         )}
@@ -318,8 +318,10 @@ function TimeGrid({ columns, droppable, onRemove, tz, conflictIds, trackById, ti
 
       {columns.map((c) => (
         <div key={c.key} className="sched-col" style={{ height }}>
-          {hours.map((m) => (
-            <div key={m} className="sched-hourline" style={{ top: (m - DAY_START) * PX_PER_MIN }} aria-hidden />
+          {/* full-hour lines strong, half-hour lines lightened — purely visual */}
+          {Array.from({ length: (DAY_END - DAY_START) / 30 + 1 }, (_, i) => DAY_START + i * 30).map((m) => (
+            <div key={m} className={`sched-hourline${m % 60 !== 0 ? ' half' : ''}`}
+              style={{ top: (m - DAY_START) * PX_PER_MIN }} aria-hidden />
           ))}
           {droppable && Array.from({ length: (DAY_END - DAY_START) / CELL_MIN }, (_, i) => (
             <DropCell key={i} colKey={c.key} min={DAY_START + i * CELL_MIN} />

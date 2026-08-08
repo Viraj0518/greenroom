@@ -15,6 +15,12 @@
 }
 .sched-chip:hover { border-color: var(--border-strong); box-shadow: var(--shadow-2); }
 .sched-chip:active { cursor: grabbing; }
+/* drag-overlay ghost gets a real lift */
+.sched-chip.lift {
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.28);
+  border-color: var(--border-strong);
+  cursor: grabbing;
+}
 .sched-chip .who { color: var(--muted); font-size: 0.75rem; font-weight: 400; margin-top: 1px; }
 
 .sched-grid-wrap { overflow-x: auto; }
@@ -35,7 +41,8 @@
 }
 
 .sched-col { position: relative; border-left: 1px solid var(--border); }
-.sched-hourline { position: absolute; left: 0; right: 0; border-top: 1px solid var(--border); opacity: 0.5; }
+.sched-hourline { position: absolute; left: 0; right: 0; border-top: 1px solid var(--border-strong); opacity: 0.8; }
+.sched-hourline.half { border-top-color: var(--border); opacity: 0.4; }
 
 .sched-cell { position: absolute; left: 0; right: 0; }
 .sched-cell.over {
@@ -47,7 +54,7 @@
   position: absolute; left: 3px; right: 3px; z-index: 2;
   background: var(--surface-2); border: 1px solid var(--border);
   border-left: 3px solid var(--track, var(--faint));
-  border-radius: var(--r-md); padding: 4px 8px; overflow: hidden;
+  border-radius: var(--r-sm); padding: 4px 8px; overflow: hidden;
   font-size: 0.78125rem; font-weight: 500;
   box-shadow: var(--shadow-1); cursor: grab;
   user-select: none; touch-action: none;

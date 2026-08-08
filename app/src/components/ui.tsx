@@ -84,12 +84,15 @@ export function Spinner({ label }: { label?: string }) {
   )
 }
 
-export function EmptyState({ glyph = '◦', title, children }: { glyph?: string; title: string; children?: ReactNode }) {
+export function EmptyState({ glyph = '◇', title, children, action }: {
+  glyph?: string; title: string; children?: ReactNode; action?: ReactNode
+}) {
   return (
     <div className="empty">
       <div className="glyph" aria-hidden>{glyph}</div>
       <strong>{title}</strong>
       {children && <span className="small">{children}</span>}
+      {action && <div className="empty-action">{action}</div>}
     </div>
   )
 }
@@ -169,11 +172,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
 // ---------- tabs ----------
 
-export function Tabs<T extends string>({ tabs, value, onChange }: {
+export function Tabs<T extends string>({ tabs, value, onChange, className }: {
   tabs: Array<{ key: T; label: ReactNode }>; value: T; onChange: (k: T) => void
+  /** pass "seg" for the segmented-control variant (view switchers) */
+  className?: string
 }) {
   return (
-    <div className="tabs" role="tablist">
+    <div className={cx('tabs', className)} role="tablist">
       {tabs.map((t) => (
         <button key={t.key} role="tab" className="tab" aria-selected={t.key === value} onClick={() => onChange(t.key)}>
           {t.label}

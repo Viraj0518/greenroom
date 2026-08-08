@@ -33,13 +33,13 @@ export function PortalPage() {
   if (err === 'missing' || err === 'invalid') {
     return (
       <Shell>
-        <EmptyState glyph="🔑" title={err === 'missing' ? 'This portal needs your personal link' : 'This link is no longer valid'}>
+        <EmptyState title={err === 'missing' ? 'This portal needs your personal link' : 'This link is no longer valid'}>
           Use the magic link from your confirmation email. Lost it? Contact the organizers and they’ll resend it.
         </EmptyState>
       </Shell>
     )
   }
-  if (err) return <Shell><EmptyState glyph="⚠️" title="Could not load your portal">Try again in a minute.</EmptyState></Shell>
+  if (err) return <Shell><EmptyState glyph="!" title="Could not load your portal">Try again in a minute.</EmptyState></Shell>
   if (!me) return <Shell><Spinner label="Loading your portal…" /></Shell>
 
   const done = me.tasks.filter((t) => t.done).length
@@ -100,57 +100,38 @@ export function PortalPage() {
         { key: 'resources', label: 'Resources' },
       ]} />
 
-      <div className="stack" style={{ gap: 16, marginTop: 16 }}>
+      <div className="portal-layout">
+        <div className="stack" style={{ gap: 16 }}>
         {tab === 'home' && (
-          <>
-            <Card title="Your progress">
-              <Progress value={done} max={me.tasks.length} />
-              <p className="muted small" style={{ marginTop: 8 }}>
-                {done === me.tasks.length
-                  ? 'All set — you’re ready for the event 🎉'
-                  : `${me.tasks.length - done} task${me.tasks.length - done === 1 ? '' : 's'} to go.`}
-              </p>
-              {nextUp.length > 0 && (
-                <ul style={{ listStyle: 'none', padding: 0, marginTop: 10 }} className="stack">
-                  {nextUp.map((t) => (
-                    <li key={t.key} className="spread small">
-                      <span>→ {t.label}</span>
-                      <span className="row" style={{ gap: 8 }}>
-                        {t.due_at && (
-                          <span className={isOverdue(t.due_at) ? '' : 'faint'}
-                            style={isOverdue(t.due_at) ? { color: 'var(--danger)' } : undefined}>
-                            due {fmtDate(t.due_at)}
-                          </span>
-                        )}
-                        <Button size="sm" variant="ghost" onClick={() => setTab('tasks')}>Open</Button>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
+          me.submissions.some((s) => s.status === 'accepted') ? (
+            <Card title="You’re speaking!">
+              <ul style={{ listStyle: 'none', padding: 0 }} className="stack">
+                {me.submissions.filter((s) => s.status === 'accepted').map((s) => (
+                  <li key={s.id} className="spread small">
+                    <strong>{s.title}</strong>
+                    {s.slot
+                      ? <span className="muted">{fmtDateTime(s.slot.starts_at)}{s.slot.room ? ` · ${s.slot.room}` : ''}</span>
+                      : <span className="faint">time TBA</span>}
+                  </li>
+                ))}
+              </ul>
+              <CalendarLinks speakerId={me.speaker.id} eventName={me.event.name} icsPath={me.ics_url} />
             </Card>
-            {me.submissions.some((s) => s.status === 'accepted') && (
-              <Card title="You’re speaking!">
-                <ul style={{ listStyle: 'none', padding: 0 }} className="stack">
-                  {me.submissions.filter((s) => s.status === 'accepted').map((s) => (
-                    <li key={s.id} className="spread small">
-                      <strong>{s.title}</strong>
-                      {s.slot
-                        ? <span className="muted">{fmtDateTime(s.slot.starts_at)}{s.slot.room ? ` · ${s.slot.room}` : ''}</span>
-                        : <span className="faint">time TBA</span>}
-                    </li>
-                  ))}
-                </ul>
-                <CalendarLinks speakerId={me.speaker.id} eventName={me.event.name} icsPath={me.ics_url} />
-              </Card>
-            )}
-          </>
+          ) : (
+            <Card title="Welcome">
+              <p className="muted small">
+                Track your submission status under <strong>Sessions</strong>, keep your public
+                profile fresh under <strong>Profile</strong>, and work through your onboarding
+                in <strong>Tasks</strong>. Your next steps are always in the sidebar.
+              </p>
+            </Card>
+          )
         )}
 
         {tab === 'sessions' && (
           <Card title="Your submissions">
             {me.submissions.length === 0
-              ? <EmptyState glyph="📝" title="No submissions yet" />
+              ? <EmptyState title="No submissions yet" />
               : (
                 <ul style={{ listStyle: 'none', padding: 0 }} className="stack">
                   {me.submissions.map((s) => (
@@ -197,6 +178,36 @@ export function PortalPage() {
         )}
 
         {tab === 'resources' && <ResourcesTab slug={me.event.slug} />}
+        </div>
+
+        <aside className="portal-rail">
+          <Card title="Next steps">
+            <Progress value={done} max={me.tasks.length} />
+            <p className="muted small" style={{ marginTop: 8 }}>
+              {done === me.tasks.length
+                ? 'All set — you’re ready for the event.'
+                : `${done}/${me.tasks.length} done · ${me.tasks.length - done} to go`}
+            </p>
+            {nextUp.length > 0 && (
+              <ul style={{ listStyle: 'none', padding: 0, marginTop: 10 }} className="stack">
+                {nextUp.map((t) => (
+                  <li key={t.key} className="spread small">
+                    <span className="truncate">{t.label}</span>
+                    <span className="row" style={{ gap: 8, flex: 'none' }}>
+                      {t.due_at && (
+                        <span className={isOverdue(t.due_at) ? '' : 'faint'}
+                          style={isOverdue(t.due_at) ? { color: 'var(--danger)' } : undefined}>
+                          due {fmtDate(t.due_at)}
+                        </span>
+                      )}
+                      <Button size="sm" variant="ghost" onClick={() => setTab('tasks')}>Open</Button>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </aside>
       </div>
     </Shell>
   )
@@ -214,7 +225,7 @@ function ResourcesTab({ slug }: { slug: string }) {
   }, [slug])
 
   if (!pages) return <Spinner />
-  if (pages.length === 0) return <EmptyState glyph="📄" title="No resources published yet" />
+  if (pages.length === 0) return <EmptyState title="No resources published yet" />
 
   const current = pages.find((p) => p.id === open)
   return (
@@ -371,9 +382,9 @@ function UploadRow({ label, hint, kind, accept, assets, onChange }: {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main style={{ maxWidth: 680, margin: '0 auto', padding: '28px 16px 80px' }}>
+    <main className="portal-shell">
       {children}
-      <footer className="faint small" style={{ textAlign: 'center', marginTop: 40 }}>
+      <footer className="shell-foot faint small">
         Powered by <Link to="/">GreenRoom</Link>
       </footer>
     </main>
