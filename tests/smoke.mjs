@@ -20,6 +20,24 @@ if (!base) {
 }
 if (readOnly) console.log('MODE: read-only (no mutations; curated-count assertions active)\n');
 
+// Full (mutating) mode is for LOCAL stacks only. Its "self-clean" can only
+// PATCH submissions to withdrawn — the API has no DELETE routes — so rows
+// persist and permanently inflate staging counts (breaks curated freshness).
+const isLocalTarget = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(base);
+if (!readOnly && !isLocalTarget && !args.includes('--force-mutations')) {
+  console.error('╔══════════════════════════════════════════════════════════════════╗');
+  console.error('║  DO NOT RUN FULL-MODE SMOKE AGAINST STAGING                      ║');
+  console.error('║  Mutating checks create speaker/submission rows that CANNOT be  ║');
+  console.error('║  deleted via the API — they permanently dirty the curated demo   ║');
+  console.error('║  dataset until someone re-seeds.                                 ║');
+  console.error('║                                                                  ║');
+  console.error('║  Wanted a deploy check?   add --read-only                        ║');
+  console.error('║  Really need mutations?   add --force-mutations (then tell the   ║');
+  console.error('║  maintainer a re-seed is owed)                                   ║');
+  console.error('╚══════════════════════════════════════════════════════════════════╝');
+  process.exit(2);
+}
+
 const results = [];
 async function check(name, fn) {
   try {
@@ -167,7 +185,7 @@ async function selfClean() {
         method: 'PATCH', headers: { cookie, 'content-type': 'application/json' },
         body: JSON.stringify({ status: 'withdrawn' }),
       });
-      console.log(`  🧹 withdrew smoke submission "${s.title}": ${r.status}`);
+      console.log(`  🧹 withdrew smoke submission "${s.title}": ${r.status} (rows persist — re-seed to fully restore curated counts)`);
     }
   }
 }

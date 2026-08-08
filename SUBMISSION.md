@@ -3,11 +3,12 @@
 Everything the entry form needs. Target: **Wednesday Aug 12, before 10 PM PT.**
 Submit ONLY after QA's explicit GO on the candidate sha (M5 gate).
 
-> **✅ GATE PASSED — CLEARED TO SUBMIT (2026-08-08)**
-> Candidate sha: `bca6296` (= public main tip, modulo the docs-only stamp commit)
-> Immutable deployment: https://f054c3a3.greenroom-dev.pages.dev (Pages Source verified = bca6296; QA content-hash-matched the deployed bundle)
+> **✅ GATE PASSED — CLEARED TO SUBMIT (2026-08-08, design iteration 1 promoted)**
+> **Deployed artifact**: sha `4f73b67` (supersedes bca6296) — this exact sha's clean-worktree build is what both URLs below serve, content-hash-verified.
+> **Repo main tip**: ahead of `4f73b67` by docs/tests-only commits (this stamp + smoke-guard); verify with `git diff 4f73b67..main --name-only` → only `.md` files and `tests/`. Nothing under `app/` or `functions/` — a rebuild of main would produce the identical artifact.
+> Immutable deployment: https://0cfbedfc.greenroom-dev.pages.dev (QA content-hash-matched the served bundle against an independent clean rebuild of the sha, on this URL and the alias; external-origin scan clean)
 > Alias: https://greenroom-dev.pages.dev (serving the same deployment)
-> QA GO: issued after full mutating suite on a quiesced bca6296 checkout + read-only staging leg (18/18, curated-freshness green)
+> QA GO: quiesced full suite 101 pass / 1 skip / 0 fail on 4f73b67 + read-only staging leg 18/18 with curated-freshness green + coordinator browser audit PASS
 
 ## Form fields
 
