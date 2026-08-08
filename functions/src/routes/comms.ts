@@ -190,8 +190,16 @@ comms.post('/events/:eventId/send', async (c) => {
         }
       : null
     const icsLink = icsUrl(c.env, c.req.url, speaker)
+    // Unscheduled speaker: drop whole template lines that reference the per-slot
+    // calendar links rather than rendering visibly broken "[Google]()" markup.
+    const bodyTemplate = linkEvent
+      ? template.body_md
+      : template.body_md
+          .split('\n')
+          .filter((line) => !/\{\{\s*(gcal_link|outlook_link)\s*\}\}/.test(line))
+          .join('\n')
     const subject = renderVars(template.subject, { name: speaker.name, event: event.name })
-    const bodyMd = renderVars(template.body_md, {
+    const bodyMd = renderVars(bodyTemplate, {
       name: speaker.name,
       email: speaker.email,
       event: event.name,
@@ -203,6 +211,8 @@ comms.post('/events/:eventId/send', async (c) => {
       gcal_link: linkEvent ? googleCalendarLink(linkEvent) : '',
       outlook_link: linkEvent ? outlookCalendarLink(linkEvent) : '',
     })
+      // Safety net for any other empty-var link: "[text]()" degrades to plain text.
+      .replace(/\[([^\]]*)\]\(\s*\)/g, '$1')
     const attachments = body.include_ics
       ? [
           {
