@@ -3,6 +3,7 @@ import type { AppEnv, Speaker } from '../types'
 import { notFound, forbidden, notConfigured } from '../lib/http'
 import { one } from '../lib/db'
 import { sessionUser, speakerToken } from '../lib/auth'
+import { getStorage } from '../storage/provider'
 
 interface AssetRow {
   id: string
@@ -40,13 +41,14 @@ assets.get('/assets/:assetId', async (c) => {
     }
   }
 
-  if (!c.env.FILES) throw notConfigured('File storage is not configured (R2 binding missing)', 'storage_not_configured')
-  const obj = await c.env.FILES.get(asset.r2_key)
+  const storage = getStorage(c.env)
+  if (!storage) throw notConfigured('File storage is not configured', 'storage_not_configured')
+  const obj = await storage.get(asset.r2_key)
   if (!obj) throw notFound('Asset file missing from storage', 'asset_file_missing')
 
   return new Response(obj.body, {
     headers: {
-      'Content-Type': asset.content_type || obj.httpMetadata?.contentType || 'application/octet-stream',
+      'Content-Type': asset.content_type || obj.contentType || 'application/octet-stream',
       'Content-Disposition': `inline; filename="${asset.filename.replace(/"/g, '')}"`,
       'Cache-Control': asset.kind === 'headshot' ? 'public, max-age=300' : 'private, no-store',
       'Access-Control-Allow-Origin': '*',

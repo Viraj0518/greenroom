@@ -1,9 +1,10 @@
 import { Hono } from 'hono'
 import type { AppEnv, AssetKind, Speaker } from '../types'
 import { ASSET_KINDS } from '../types'
-import { readBody, readJson, optionalString, badRequest, notFound, notConfigured } from '../lib/http'
+import { readBody, optionalString, badRequest, notFound, notConfigured } from '../lib/http'
 import { all, one, run, uuid, now, parseJson } from '../lib/db'
 import { requireSpeaker } from '../lib/auth'
+import { getStorage } from '../storage/provider'
 
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 
@@ -81,7 +82,8 @@ portal.patch('/portal/me', async (c) => {
 
 // Multipart upload: fields `kind` + `file` → R2, registers asset, auto-completes matching task.
 portal.post('/portal/assets', async (c) => {
-  if (!c.env.FILES) throw notConfigured('File storage is not configured (R2 binding missing)', 'storage_not_configured')
+  const storage = getStorage(c.env)
+  if (!storage) throw notConfigured('File storage is not configured', 'storage_not_configured')
   const speaker = c.get('speaker')!
   let form: FormData
   try {
@@ -105,7 +107,7 @@ portal.post('/portal/assets', async (c) => {
   const assetId = uuid()
   const key = `events/${speaker.event_id}/speakers/${speaker.id}/${kind}/${assetId}-${filename}`
 
-  await c.env.FILES.put(key, await file.arrayBuffer(), { httpMetadata: { contentType } })
+  await storage.put(key, await file.arrayBuffer(), contentType)
   await run(
     c.env.DB,
     `INSERT INTO assets (id, event_id, speaker_id, submission_id, kind, r2_key, filename, content_type, size, created_at)
@@ -143,8 +145,9 @@ portal.delete('/portal/assets/:assetId', async (c) => {
     speaker.id
   )
   if (!asset) throw notFound('Asset not found')
-  if (!c.env.FILES) throw notConfigured('File storage is not configured (R2 binding missing)', 'storage_not_configured')
-  await c.env.FILES.delete(asset.r2_key)
+  const storage = getStorage(c.env)
+  if (!storage) throw notConfigured('File storage is not configured', 'storage_not_configured')
+  await storage.delete(asset.r2_key)
   await run(c.env.DB, 'DELETE FROM assets WHERE id = ?', asset.id)
   if (asset.kind === 'headshot') {
     await run(

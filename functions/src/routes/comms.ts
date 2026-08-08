@@ -1,10 +1,12 @@
 import { Hono } from 'hono'
 import type { AppEnv, D1Database, Speaker } from '../types'
-import { readBody, readJson, requireString, optionalString, badRequest, notFound, unauthorized } from '../lib/http'
+import { readBody, requireString, optionalString, badRequest, notFound, unauthorized } from '../lib/http'
 import { all, one, run, uuid, now } from '../lib/db'
 import { requireOrganizer } from '../lib/auth'
 import { buildCalendar, type IcsEvent } from '../lib/ics'
-import { sendSpeakerEmail, portalUrl, icsUrl } from '../email/send'
+import { portalUrl, icsUrl } from '../email/send'
+import { getEmailProvider } from '../email/provider'
+import { renderMarkdown, renderVars } from '../lib/markdown'
 
 const comms = new Hono<AppEnv>()
 
@@ -127,47 +129,100 @@ comms.post('/events/:eventId/send', async (c) => {
     speakers = await all<Speaker>(c.env.DB, 'SELECT * FROM speakers WHERE event_id = ?', eventId)
   }
 
+  // Pin #6: batch the per-speaker reads (1 IN-query each) and the log writes (1 db.batch)
+  // instead of looping queries — the loop below only does the unavoidable network sends.
+  const speakerIds = speakers.map((s) => s.id)
+  const inPlaceholders = speakerIds.map(() => '?').join(',')
+
+  const talksBySpeaker = new Map<string, string[]>()
+  if (speakerIds.length) {
+    const talkRows = await all<{ speaker_id: string; title: string }>(
+      c.env.DB,
+      `SELECT speaker_id, title FROM submissions WHERE status = 'accepted' AND speaker_id IN (${inPlaceholders})`,
+      ...speakerIds
+    )
+    for (const t of talkRows) {
+      if (!talksBySpeaker.has(t.speaker_id)) talksBySpeaker.set(t.speaker_id, [])
+      talksBySpeaker.get(t.speaker_id)!.push(t.title)
+    }
+  }
+
+  const icsRowsBySpeaker = new Map<string, IcsRow[]>()
+  if (body.include_ics && speakerIds.length) {
+    const icsRows = await all<IcsRow & { speaker_id: string }>(
+      c.env.DB,
+      `SELECT s.speaker_id, sl.id, sl.starts_at, sl.ends_at, sl.title AS slot_title, s.title AS talk_title,
+              s.abstract, r.name AS room_name
+       FROM schedule_slots sl
+       JOIN submissions s ON s.id = sl.submission_id
+       LEFT JOIN rooms r ON r.id = sl.room_id
+       WHERE s.status = 'accepted' AND s.speaker_id IN (${inPlaceholders})
+       ORDER BY sl.starts_at`,
+      ...speakerIds
+    )
+    for (const r of icsRows) {
+      if (!icsRowsBySpeaker.has(r.speaker_id)) icsRowsBySpeaker.set(r.speaker_id, [])
+      icsRowsBySpeaker.get(r.speaker_id)!.push(r)
+    }
+  }
+
+  const provider = getEmailProvider(c.env)
+  const sentAt = now()
   let sent = 0
   let failed = 0
   const errors: string[] = []
+  const logRows: Array<[string, string, string, string, string, string, string, string]> = []
+
   for (const speaker of speakers) {
-    const talks = await all<{ title: string }>(
-      c.env.DB,
-      "SELECT title FROM submissions WHERE speaker_id = ? AND status = 'accepted'",
-      speaker.id
-    )
+    const talks = talksBySpeaker.get(speaker.id) ?? []
+    const subject = renderVars(template.subject, { name: speaker.name, event: event.name })
+    const bodyMd = renderVars(template.body_md, {
+      name: speaker.name,
+      email: speaker.email,
+      event: event.name,
+      title: talks[0],
+      titles: talks.join(', '),
+      portal_url: portalUrl(c.env, c.req.url, speaker),
+      ics_url: icsUrl(c.env, c.req.url, speaker),
+    })
     const attachments = body.include_ics
       ? [
           {
             filename: 'greenroom-schedule.ics',
-            content_b64: b64Utf8(await speakerIcsText(c.env.DB, speaker, event.name)),
+            content_b64: b64Utf8(buildCalendar(event.name, icsRowsToEvents(icsRowsBySpeaker.get(speaker.id) ?? []), sentAt)),
             content_type: 'text/calendar',
           },
         ]
       : undefined
-    const result = await sendSpeakerEmail({
-      env: c.env,
-      eventId,
-      speaker,
-      templateKey,
-      subject: template.subject,
-      bodyMd: template.body_md,
-      vars: {
-        name: speaker.name,
-        email: speaker.email,
-        event: event.name,
-        title: talks[0]?.title,
-        titles: talks.map((t) => t.title).join(', '),
-        portal_url: portalUrl(c.env, c.req.url, speaker),
-        ics_url: icsUrl(c.env, c.req.url, speaker),
-      },
-      attachments,
-    })
+
+    const result = await provider.send({ to: speaker.email, subject, html: renderMarkdown(bodyMd), text: bodyMd, attachments })
     if (result.ok) sent++
     else {
       failed++
       if (result.error) errors.push(`${speaker.email}: ${result.error}`)
     }
+    logRows.push([
+      uuid(),
+      eventId,
+      speaker.id,
+      templateKey,
+      subject,
+      result.ok ? 'sent' : `failed: ${result.error ?? 'unknown'}`.slice(0, 300),
+      result.provider,
+      sentAt,
+    ])
+  }
+
+  if (logRows.length) {
+    await c.env.DB.batch(
+      logRows.map((row) =>
+        c.env.DB
+          .prepare(
+            'INSERT INTO emails_log (id, event_id, speaker_id, template_key, subject, status, provider, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+          )
+          .bind(...row)
+      )
+    )
   }
   return c.json({ requested: speakers.length, sent, failed, errors: errors.slice(0, 10) })
 })
@@ -210,16 +265,29 @@ function b64Utf8(s: string): string {
   return btoa(bin)
 }
 
+interface IcsRow {
+  id: string
+  starts_at: string
+  ends_at: string
+  slot_title: string | null
+  talk_title: string
+  room_name: string | null
+  abstract: string | null
+}
+
+function icsRowsToEvents(rows: IcsRow[]): IcsEvent[] {
+  return rows.map((r) => ({
+    uid: `${r.id}@greenroom`,
+    title: r.slot_title ?? r.talk_title,
+    starts_at: r.starts_at,
+    ends_at: r.ends_at,
+    location: r.room_name ?? undefined,
+    description: r.abstract ?? undefined,
+  }))
+}
+
 async function speakerIcsText(db: D1Database, speaker: Speaker, calendarName: string): Promise<string> {
-  const rows = await all<{
-    id: string
-    starts_at: string
-    ends_at: string
-    slot_title: string | null
-    talk_title: string
-    room_name: string | null
-    abstract: string | null
-  }>(
+  const rows = await all<IcsRow>(
     db,
     `SELECT sl.id, sl.starts_at, sl.ends_at, sl.title AS slot_title, s.title AS talk_title,
             s.abstract, r.name AS room_name
@@ -230,15 +298,7 @@ async function speakerIcsText(db: D1Database, speaker: Speaker, calendarName: st
      ORDER BY sl.starts_at`,
     speaker.id
   )
-  const events: IcsEvent[] = rows.map((r) => ({
-    uid: `${r.id}@greenroom`,
-    title: r.slot_title ?? r.talk_title,
-    starts_at: r.starts_at,
-    ends_at: r.ends_at,
-    location: r.room_name ?? undefined,
-    description: r.abstract ?? undefined,
-  }))
-  return buildCalendar(calendarName, events, now())
+  return buildCalendar(calendarName, icsRowsToEvents(rows), now())
 }
 
 export default comms

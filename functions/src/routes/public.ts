@@ -1,4 +1,6 @@
 // Public, CORS-open, cacheable endpoints: embeds JSON + public resource pages.
+// Data loaders are shared with the server-rendered /embed/* HTML pages (pin #6),
+// so both surfaces stay on the same single-digit query budget.
 
 import { Hono } from 'hono'
 import type { AppEnv, D1Database } from '../types'
@@ -7,10 +9,19 @@ import { all, one, parseJson } from '../lib/db'
 
 const pub = new Hono<AppEnv>()
 
-const CACHE_60 = 'public, max-age=60'
+export const CACHE_60 = 'public, max-age=60'
 
-async function eventBySlug(db: D1Database, slug: string) {
-  const event = await one<{ id: string; name: string; slug: string; starts_on: string | null; ends_on: string | null; timezone: string | null }>(
+export interface PublicEvent {
+  id: string
+  name: string
+  slug: string
+  starts_on: string | null
+  ends_on: string | null
+  timezone: string | null
+}
+
+export async function eventBySlug(db: D1Database, slug: string): Promise<PublicEvent> {
+  const event = await one<PublicEvent>(
     db,
     'SELECT id, name, slug, starts_on, ends_on, timezone FROM events WHERE slug = ?',
     slug
@@ -19,9 +30,22 @@ async function eventBySlug(db: D1Database, slug: string) {
   return event
 }
 
-// Confirmed (accepted) speakers for the speaker-gallery embed.
-pub.get('/public/events/:slug/speakers', async (c) => {
-  const event = await eventBySlug(c.env.DB, c.req.param('slug'))
+export interface SpeakersPayload {
+  event: { name: string; slug: string }
+  speakers: Array<{
+    id: string
+    name: string
+    tagline: string | null
+    company: string | null
+    bio: string | null
+    links: Record<string, unknown>
+    headshot_url: string | null
+  }>
+}
+
+// 2 queries total.
+export async function loadSpeakersPayload(db: D1Database, slug: string): Promise<SpeakersPayload> {
+  const event = await eventBySlug(db, slug)
   const rows = await all<{
     id: string
     name: string
@@ -31,7 +55,7 @@ pub.get('/public/events/:slug/speakers', async (c) => {
     links_json: string | null
     headshot_asset_id: string | null
   }>(
-    c.env.DB,
+    db,
     `SELECT DISTINCT sp.id, sp.name, sp.tagline, sp.company, sp.bio, sp.links_json,
             (SELECT a.id FROM assets a
              WHERE a.speaker_id = sp.id AND a.kind = 'headshot'
@@ -42,27 +66,43 @@ pub.get('/public/events/:slug/speakers', async (c) => {
      ORDER BY sp.name`,
     event.id
   )
-  return c.json(
-    {
-      event: { name: event.name, slug: event.slug },
-      speakers: rows.map((r) => ({
-        id: r.id,
-        name: r.name,
-        tagline: r.tagline,
-        company: r.company,
-        bio: r.bio,
-        links: parseJson(r.links_json, {}),
-        headshot_url: r.headshot_asset_id ? `/api/assets/${r.headshot_asset_id}` : null,
-      })),
-    },
-    200,
-    { 'Cache-Control': CACHE_60 }
-  )
-})
+  return {
+    event: { name: event.name, slug: event.slug },
+    speakers: rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      tagline: r.tagline,
+      company: r.company,
+      bio: r.bio,
+      links: parseJson(r.links_json, {}),
+      headshot_url: r.headshot_asset_id ? `/api/assets/${r.headshot_asset_id}` : null,
+    })),
+  }
+}
 
-// Scheduled talks grouped by day for the schedule embed.
-pub.get('/public/events/:slug/schedule', async (c) => {
-  const event = await eventBySlug(c.env.DB, c.req.param('slug'))
+export interface ScheduleSlotView {
+  id: string
+  title: string
+  abstract: string | null
+  speaker: string | null
+  speaker_company: string | null
+  starts_at: string
+  ends_at: string
+  kind: string
+  room_id: string | null
+  track_id: string | null
+}
+
+export interface SchedulePayload {
+  event: { name: string; slug: string; timezone: string | null }
+  rooms: Array<{ id: string; name: string }>
+  tracks: Array<{ id: string; name: string; color: string | null }>
+  days: Array<{ date: string; slots: ScheduleSlotView[] }>
+}
+
+// 4 queries total.
+export async function loadSchedulePayload(db: D1Database, slug: string): Promise<SchedulePayload> {
+  const event = await eventBySlug(db, slug)
   const [slots, rooms, tracks] = await Promise.all([
     all<{
       id: string
@@ -77,7 +117,7 @@ pub.get('/public/events/:slug/schedule', async (c) => {
       room_id: string | null
       track_id: string | null
     }>(
-      c.env.DB,
+      db,
       `SELECT sl.id, sl.starts_at, sl.ends_at, sl.kind, sl.title AS slot_title, sl.room_id, sl.track_id,
               s.title AS talk_title, s.abstract, sp.name AS speaker_name, sp.company AS speaker_company
        FROM schedule_slots sl
@@ -87,15 +127,15 @@ pub.get('/public/events/:slug/schedule', async (c) => {
        ORDER BY sl.starts_at`,
       event.id
     ),
-    all<{ id: string; name: string }>(c.env.DB, 'SELECT id, name FROM rooms WHERE event_id = ? ORDER BY sort, name', event.id),
+    all<{ id: string; name: string }>(db, 'SELECT id, name FROM rooms WHERE event_id = ? ORDER BY sort, name', event.id),
     all<{ id: string; name: string; color: string | null }>(
-      c.env.DB,
+      db,
       'SELECT id, name, color FROM tracks WHERE event_id = ? ORDER BY sort, name',
       event.id
     ),
   ])
 
-  const days = new Map<string, unknown[]>()
+  const days = new Map<string, ScheduleSlotView[]>()
   for (const slot of slots) {
     const day = slot.starts_at.slice(0, 10)
     if (!days.has(day)) days.set(day, [])
@@ -113,19 +153,26 @@ pub.get('/public/events/:slug/schedule', async (c) => {
     })
   }
 
-  return c.json(
-    {
-      event: { name: event.name, slug: event.slug, timezone: event.timezone },
-      rooms,
-      tracks,
-      days: [...days.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([date, daySlots]) => ({ date, slots: daySlots })),
-    },
-    200,
-    { 'Cache-Control': CACHE_60 }
-  )
+  return {
+    event: { name: event.name, slug: event.slug, timezone: event.timezone },
+    rooms,
+    tracks,
+    days: [...days.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([date, daySlots]) => ({ date, slots: daySlots })),
+  }
+}
+
+// --- JSON routes ---
+
+pub.get('/public/events/:slug/speakers', async (c) => {
+  const payload = await loadSpeakersPayload(c.env.DB, c.req.param('slug'))
+  return c.json(payload, 200, { 'Cache-Control': CACHE_60 })
 })
 
-// Public resource pages.
+pub.get('/public/events/:slug/schedule', async (c) => {
+  const payload = await loadSchedulePayload(c.env.DB, c.req.param('slug'))
+  return c.json(payload, 200, { 'Cache-Control': CACHE_60 })
+})
+
 pub.get('/public/events/:slug/resources', async (c) => {
   const event = await eventBySlug(c.env.DB, c.req.param('slug'))
   const rows = await all(

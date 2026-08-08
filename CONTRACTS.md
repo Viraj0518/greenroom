@@ -204,7 +204,18 @@ Storage-dependent routes return 501 `code: "storage_not_configured"` while R2 is
    - Prefer boring: no client state library, no CSS framework, no ORM. Fetch + React state, hand
      CSS, prepared statements.
 
+7. **Storage = Supabase now, R2 later (operator, 2026-08-08).** File storage runs on Supabase
+   Storage (R2 is billing-blocked); we will swap back to R2 later, so backend MUST put all object
+   I/O behind a `StorageProvider` interface (`put(key, body, contentType)`, `get(key)`,
+   `delete(key)`) with two adapters: `supabase` (Storage REST API via plain fetch — do NOT add the
+   supabase-js SDK, keep it lightweight per pin #6) and `r2` (FILES binding, used when bound).
+   Selection at startup: R2 binding present → r2, else SUPABASE_URL+SUPABASE_SERVICE_KEY present →
+   supabase, else degrade gracefully ("storage not configured"). Provisioned and live:
+   project ref `dixugxflxkqnsrcxyyty` (dedicated — NOT the UNBLOCK projects), private bucket
+   `greenroom-files`, creds in `~/greenroom/.dev.vars` (gitignored). `assets.r2_key` stays as-is
+   and holds the provider-agnostic object key. API surface unchanged.
+
 ## Bindings (wrangler.toml names — maintainer owns file, these names are fixed)
 - D1: `DB` (database `greenroom-db`)
-- R2: `FILES` (bucket `greenroom-files`)
-- Vars/secrets: `RESEND_API_KEY?`, `ANTHROPIC_API_KEY?`, `APP_BASE_URL`
+- R2: `FILES` (bucket `greenroom-files`) — commented out until billing unblocks; see pin #7
+- Vars/secrets: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` (Pages secrets + .dev.vars), `RESEND_API_KEY?`, `ANTHROPIC_API_KEY?`, `APP_BASE_URL`

@@ -13,6 +13,7 @@ import dashboard from './routes/dashboard'
 import resources from './routes/resources'
 import pub from './routes/public'
 import integrations from './routes/integrations'
+import embeds from './embed'
 
 const app = new Hono<AppEnv>()
 
@@ -38,6 +39,9 @@ app.get('/api/health', (c) => c.json({ ok: true, service: 'greenroom-api' }))
 for (const routes of [auth, events, forms, portal, assets, reviews, schedule, comms, dashboard, resources, pub, integrations]) {
   app.route('/api', routes)
 }
+
+// Server-rendered embed pages live outside /api (served via functions/embed/[[route]].ts).
+app.route('/', embeds)
 
 // Error envelope: { "error": "<human message>", "code": "<machine code>" }
 app.onError((err, c) => {

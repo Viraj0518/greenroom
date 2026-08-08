@@ -155,6 +155,37 @@ if (SEED.published && SEED.speakerId && SEED.speakerToken) {
   });
 }
 
+// --- pin #6: latency gate on public endpoints (proxy for the edge budget) ---
+await check('latency: public endpoints median < 500ms (3 samples each)', async () => {
+  const paths = [
+    `/api/public/events/${SEED.eventSlug}/speakers`,
+    `/api/public/events/${SEED.eventSlug}/schedule`,
+    `/embed/speakers/${SEED.eventSlug}`,
+  ];
+  const slow = [];
+  for (const p of paths) {
+    const times = [];
+    for (let i = 0; i < 3; i++) {
+      const t0 = performance.now();
+      await fetch(base + p);
+      times.push(performance.now() - t0);
+    }
+    const median = times.sort((a, b) => a - b)[1];
+    console.log(`     ${p}: median ${Math.round(median)}ms (${times.map((t) => Math.round(t)).join('/')}ms)`);
+    if (median > 500) slow.push(`${p} median ${Math.round(median)}ms`);
+  }
+  assert(slow.length === 0, `over 500ms budget: ${slow.join('; ')}`);
+});
+
+await check('pin #6: embed pages are self-contained (< 30 KB, no SPA bundle reference)', async () => {
+  for (const p of [`/embed/speakers/${SEED.eventSlug}`, `/embed/schedule/${SEED.eventSlug}`]) {
+    const r = await get(p);
+    assert(r.status === 200, `${p}: status ${r.status}`);
+    assert(r.text.length < 30_000, `${p}: ${r.text.length}b exceeds 30 KB embed budget`);
+    assert(!/<script[^>]+src=["']\/assets\//i.test(r.text), `${p}: references SPA bundle — not server-rendered`);
+  }
+});
+
 const failed = results.filter((r) => !r.ok);
 console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
 process.exit(failed.length ? 1 : 0);

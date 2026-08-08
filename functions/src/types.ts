@@ -38,8 +38,12 @@ export interface R2Bucket {
 
 export interface Env {
   DB: D1Database
-  // Optional until R2 is enabled on the account (see wrangler.toml); routes 501 cleanly without it.
+  // Optional until R2 is enabled on the account (see wrangler.toml); when absent the
+  // storage layer falls back to Supabase Storage (pin #7) or 501s cleanly.
   FILES?: R2Bucket
+  SUPABASE_URL?: string
+  SUPABASE_SERVICE_KEY?: string
+  SUPABASE_BUCKET?: string
   APP_BASE_URL?: string
   EMAIL_FROM?: string
   RESEND_API_KEY?: string

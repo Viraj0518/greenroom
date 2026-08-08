@@ -37,7 +37,7 @@ beforeAll(async () => {
   const round = await org.post(`/api/events/${eventId}/rounds`, {
     json: {
       name: 'Round 1', round_no: 1, is_open: 1,
-      rubric_json: JSON.stringify({ criteria: [{ id: 'clarity', max: 5 }, { id: 'relevance', max: 5 }] }),
+      rubric: { criteria: [{ id: 'clarity', max: 5 }, { id: 'relevance', max: 5 }] },
     },
   });
   if (round.status >= 400) throw new Error(`round creation failed: ${round.status} ${round.text}`);
@@ -156,6 +156,14 @@ describe('scoring + leaderboard math', () => {
     const lastScoredIdx = Math.max(...scored.map((r) => rows.indexOf(r)));
     const firstNullIdx = Math.min(...unreviewed.map((r) => rows.indexOf(r)));
     expect(firstNullIdx).toBeGreaterThan(lastScoredIdx);
+  });
+
+  it('scores_json as a JSON STRING is rejected (pin #5: object form only)', async () => {
+    const org = await organizer();
+    const res = await org.post(`/api/rounds/${roundId}/submissions/${highSubId}/review`, {
+      json: { scores_json: JSON.stringify({ clarity: 3 }), comment: 'string shape' },
+    });
+    expect(res.status).toBe(400);
   });
 
   it('leaderboard requires organizer auth → 401 without cookie', async () => {

@@ -187,12 +187,11 @@ let slots: ScheduleSlot[] = [
   slot(2, 1, 'rm_a', 0, 16, 30, 30),
   slot(3, 2, 'rm_main', 0, 17, 15, 30),
   slot(4, 5, 'rm_b', 0, 17, 15, 30),
-  slot(5, 4, 'rm_a', 0, 17, 15, 30),
   slot(6, null, 'rm_main', 0, 18, 0, 45, 'break', 'Lunch'),
   slot(7, 7, 'rm_main', 0, 18, 45, 30),
   // conflict: Ada (sub_0) also placed in Room B overlapping her Main Stage slot
   slot(8, 0, 'rm_b', 0, 16, 45, 30),
-  slot(9, 8, 'rm_a', 1, 16, 30, 30),
+  // subs 4 (Design Tokens) and 8 (Screen Readers) stay unscheduled → tray demo
 ]
 
 const templates: EmailTemplate[] = [

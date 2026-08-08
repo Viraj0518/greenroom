@@ -12,7 +12,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { makeEvent, makeForm, submitCfp, organizer, Client } from '../helpers/api';
 import { getMagicToken } from '../helpers/stack';
 
-const R2_READY = process.env.R2_READY === '1';
+const STORAGE_READY = process.env.STORAGE_READY === '1';
 
 let magicToken: string | undefined;
 
@@ -37,7 +37,7 @@ describe('portal task completion (no R2 needed)', () => {
   });
 });
 
-describe.skipIf(R2_READY)('R2 disabled: uploads degrade to 501 storage_not_configured (ratified)', () => {
+describe.skipIf(STORAGE_READY)('R2 disabled: uploads degrade to 501 storage_not_configured (ratified)', () => {
   it('upload with a VALID token → 501 storage_not_configured, while bad token still 401s', async () => {
     const bad = await new Client().post('/api/portal/assets', { token: 'bad' });
     expect(bad.status).toBe(401); // auth still checked before storage
@@ -51,7 +51,7 @@ describe.skipIf(R2_READY)('R2 disabled: uploads degrade to 501 storage_not_confi
   });
 });
 
-describe.skipIf(!R2_READY)('asset upload (R2) — known-blocked until operator enables R2', () => {
+describe.skipIf(!STORAGE_READY)('asset upload (R2) — known-blocked until operator enables R2', () => {
   it('uploads a headshot, lists it in portal/me, serves it via /api/assets/:id', async () => {
     if (!magicToken) return;
     const c = new Client();
