@@ -1,57 +1,95 @@
 /* Landing page. */
 
-.land { max-width: 1020px; margin: 0 auto; padding: 0 20px 70px; }
+.land { max-width: 1020px; margin: 0 auto; padding: 0 20px 72px; }
 
-.land-hero { text-align: center; padding: 11vh 0 44px; position: relative; }
+.land-hero { text-align: center; padding: 12vh 0 48px; position: relative; }
 .land-hero::before {
-  content: ''; position: absolute; inset: -40px -60px auto; height: 340px;
-  background: radial-gradient(ellipse 60% 100% at 50% 0%, var(--accent-soft), transparent 70%);
+  content: ''; position: absolute; inset: -60px -80px auto; height: 420px;
+  background:
+    radial-gradient(ellipse 55% 90% at 50% 0%, var(--accent-soft), transparent 70%),
+    radial-gradient(ellipse 30% 50% at 50% 0%, var(--accent-wash), transparent 60%);
   pointer-events: none; z-index: -1;
 }
-.land-mark { font-size: 2.9rem; line-height: 1; margin-bottom: 10px; }
-.land-hero h1 { font-size: clamp(1.9rem, 5vw, 2.7rem); letter-spacing: -0.02em; }
-.land-tag { font-size: clamp(1rem, 2.4vw, 1.18rem); color: var(--muted); margin: 12px auto 0; max-width: 620px; }
-.land-ctas { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 26px; }
-.land-ctas .btn { padding: 10px 20px; font-size: 1rem; border-radius: 12px; }
+.land-mark {
+  display: flex; justify-content: center; align-items: center;
+  margin-bottom: 28px;
+}
+.land-mark .brand-dot {
+  width: 18px; height: 18px;
+  box-shadow: 0 0 0 5px var(--accent-soft), 0 0 32px var(--accent-glow);
+}
+.land-hero h1 {
+  font-size: clamp(2rem, 5.5vw, 3rem);
+  letter-spacing: -0.035em; font-weight: 650; line-height: 1.08;
+  max-width: 720px; margin: 0 auto;
+}
+.land-tag {
+  font-size: clamp(0.9375rem, 2.2vw, 1.0625rem); color: var(--muted);
+  margin: 16px auto 0; max-width: 560px; line-height: 1.6;
+}
+.land-ctas { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 32px; }
+.land-ctas .btn { height: 40px; padding: 0 22px; font-size: 0.875rem; border-radius: 10px; }
 
 .judge-card {
-  margin: 0 auto 40px; max-width: 720px;
-  border: 1px solid var(--accent); border-radius: var(--r-lg);
-  background: var(--surface); box-shadow: var(--shadow-2); overflow: hidden;
+  margin: 0 auto 48px; max-width: 760px;
+  border: 1px solid var(--border-strong); border-radius: var(--r-xl);
+  background: var(--surface); box-shadow: var(--shadow-2), var(--edge); overflow: hidden;
 }
 .judge-card > header {
-  background: var(--accent-soft); color: var(--accent);
-  padding: 9px 18px; font-weight: 700; font-size: 0.85rem;
-  text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--accent);
+  background: var(--accent-wash);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 18px; font-weight: 600; font-size: 0.71875rem;
+  text-transform: uppercase; letter-spacing: var(--track-ls);
 }
 .judge-steps { display: grid; gap: 0; grid-template-columns: 1fr; }
-.judge-step { padding: 14px 18px; display: flex; gap: 12px; align-items: flex-start; }
+.judge-step {
+  padding: 16px 18px; display: flex; gap: 12px; align-items: flex-start;
+  font-size: 0.84375rem; line-height: 1.55; color: var(--muted);
+}
+.judge-step a { font-weight: 550; }
 .judge-step + .judge-step { border-top: 1px solid var(--border); }
 .judge-num {
-  width: 24px; height: 24px; border-radius: 50%; flex: none; margin-top: 1px;
-  background: var(--accent); color: var(--accent-contrast);
+  width: 22px; height: 22px; border-radius: 50%; flex: none; margin-top: 1px;
+  background: var(--accent-soft); color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-glow);
   display: inline-flex; align-items: center; justify-content: center;
-  font-weight: 700; font-size: 0.8rem;
+  font-weight: 650; font-size: 0.71875rem;
 }
 .judge-step code {
-  background: var(--surface-2); padding: 1px 7px; border-radius: 5px; font-size: 0.84em;
-  white-space: nowrap;
+  background: var(--surface-2); border: 1px solid var(--border);
+  padding: 1px 6px; border-radius: 5px; font-size: 0.8em;
+  white-space: nowrap; color: var(--text);
 }
 @media (min-width: 720px) {
   .judge-steps { grid-template-columns: 1fr 1fr 1fr; }
   .judge-step + .judge-step { border-top: none; border-left: 1px solid var(--border); }
 }
 
-.feat-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+.feat-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
 .feat {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
-  padding: 18px; box-shadow: var(--shadow-1); color: inherit; text-decoration: none; display: block;
+  padding: 18px; box-shadow: var(--shadow-1), var(--edge);
+  color: inherit; text-decoration: none; display: block;
   transition: transform 130ms ease, box-shadow 130ms ease, border-color 130ms ease;
 }
-a.feat:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); border-color: var(--accent); text-decoration: none; }
-.feat .glyph { font-size: 1.45rem; margin-bottom: 8px; }
-.feat strong { display: block; margin-bottom: 3px; }
-.feat p { color: var(--muted); font-size: 0.87rem; }
-.feat .go { color: var(--accent); font-size: 0.82rem; font-weight: 600; margin-top: 8px; display: inline-block; }
+a.feat:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-2), var(--edge);
+  border-color: var(--border-strong);
+  text-decoration: none;
+}
+.feat .glyph {
+  font-size: 1.0625rem; margin-bottom: 12px;
+  width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+}
+.feat strong { display: block; margin-bottom: 4px; font-weight: 600; font-size: 0.9375rem; letter-spacing: -0.01em; }
+.feat p { color: var(--muted); font-size: 0.8125rem; line-height: 1.55; }
+.feat .go { color: var(--accent); font-size: 0.78125rem; font-weight: 550; margin-top: 10px; display: inline-block; }
 
-.land-foot { text-align: center; margin-top: 48px; color: var(--faint); font-size: 0.83rem; }
+.land-foot {
+  text-align: center; margin-top: 56px; padding-top: 24px;
+  border-top: 1px solid var(--border);
+  color: var(--faint); font-size: 0.78125rem;
+}

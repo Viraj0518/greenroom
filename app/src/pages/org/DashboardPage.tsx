@@ -81,16 +81,15 @@ export function DashboardPage() {
             {FUNNEL_STAGES.map((st) => {
               const n = byStatus[st] ?? 0
               return (
-                <div key={st} className="row" style={{ gap: 10 }}>
-                  <span className="small muted" style={{ width: 86, flex: 'none' }}>{STATUS_LABELS[st]}</span>
-                  <div className="grow" style={{ background: 'var(--surface-2)', borderRadius: 6, height: 22, overflow: 'hidden' }}>
-                    <div style={{
-                      width: `${(n / funnelMax) * 100}%`, height: '100%',
-                      background: st === 'accepted' ? 'var(--accent)' : 'var(--accent-soft)',
-                      borderRadius: 6, minWidth: n > 0 ? 6 : 0, transition: 'width 300ms',
-                    }} />
+                <div key={st} className="funnel-row">
+                  <span className="stage">{STATUS_LABELS[st]}</span>
+                  <div className="funnel-track">
+                    <div
+                      className={st === 'accepted' ? 'funnel-fill final' : 'funnel-fill'}
+                      style={{ width: `${(n / funnelMax) * 100}%`, minWidth: n > 0 ? 6 : 0 }}
+                    />
                   </div>
-                  <strong style={{ width: 32, textAlign: 'right', flex: 'none' }}>{n}</strong>
+                  <span className="count">{n}</span>
                 </div>
               )
             })}
@@ -172,12 +171,10 @@ export function DashboardPage() {
                       return (
                         <td key={t.key} style={{ textAlign: 'center' }}
                           title={done ? `Done ${fmtDate(cell?.done_at)}` : overdue ? 'Overdue' : 'Pending'}>
-                          <span aria-label={done ? 'done' : overdue ? 'overdue' : 'pending'} style={{
-                            display: 'inline-flex', width: 22, height: 22, borderRadius: '50%',
-                            alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700,
-                            background: done ? 'var(--ok-soft)' : overdue ? 'var(--danger-soft)' : 'var(--surface-3)',
-                            color: done ? 'var(--ok)' : overdue ? 'var(--danger)' : 'var(--faint)',
-                          }}>
+                          <span
+                            aria-label={done ? 'done' : overdue ? 'overdue' : 'pending'}
+                            className={`task-dot ${done ? 'done' : overdue ? 'overdue' : 'pending'}`}
+                          >
                             {done ? '✓' : overdue ? '!' : '·'}
                           </span>
                         </td>

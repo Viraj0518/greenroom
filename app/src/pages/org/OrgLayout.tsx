@@ -15,15 +15,17 @@ export function useOrg(): OrgCtxValue {
   return v
 }
 
+// `section` labels are purely presentational — rendered as sidebar group
+// headers on desktop, hidden on the mobile top scroller.
 const NAV = [
   { to: '/org', label: 'Dashboard', glyph: '▦', end: true },
-  { to: '/org/submissions', label: 'Submissions', glyph: '☰' },
+  { to: '/org/submissions', label: 'Submissions', glyph: '☰', section: 'Program' },
   { to: '/org/review', label: 'Review', glyph: '✓' },
   { to: '/org/leaderboard', label: 'Leaderboard', glyph: '↑' },
   { to: '/org/schedule', label: 'Schedule', glyph: '▤' },
-  { to: '/org/comms', label: 'Comms', glyph: '✉' },
-  { to: '/org/resources', label: 'Resources', glyph: '📄' },
-  { to: '/org/forms', label: 'Forms', glyph: '⊞' },
+  { to: '/org/comms', label: 'Comms', glyph: '✉', section: 'Speakers' },
+  { to: '/org/resources', label: 'Resources', glyph: '⇩' },
+  { to: '/org/forms', label: 'Forms', glyph: '⊞', section: 'Setup' },
   { to: '/org/settings', label: 'Settings', glyph: '⚙' },
 ]
 
@@ -63,14 +65,17 @@ export function OrgLayout() {
     <OrgCtx.Provider value={state}>
       <div className="org">
         <aside className="org-side">
-          <Link to="/" className="org-brand"><span aria-hidden>🟢</span> GreenRoom</Link>
+          <Link to="/" className="org-brand"><span className="brand-dot" aria-hidden /> GreenRoom</Link>
           <nav className="org-nav">
             {NAV.map((n) => (
-              <NavLink key={n.to} to={n.to} end={n.end as boolean | undefined}
-                className={({ isActive }) => (isActive ? 'active' : undefined)}>
-                <span aria-hidden style={{ width: 16, textAlign: 'center' }}>{n.glyph}</span>
-                {n.label}
-              </NavLink>
+              <span key={n.to} style={{ display: 'contents' }}>
+                {n.section && <span className="org-nav-label" aria-hidden>{n.section}</span>}
+                <NavLink to={n.to} end={n.end as boolean | undefined}
+                  className={({ isActive }) => (isActive ? 'active' : undefined)}>
+                  <span className="glyph" aria-hidden>{n.glyph}</span>
+                  {n.label}
+                </NavLink>
+              </span>
             ))}
           </nav>
           <div className="org-side-meta">

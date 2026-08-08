@@ -28,7 +28,7 @@ export function Landing() {
   return (
     <main className="land">
       <section className="land-hero">
-        <div className="land-mark" aria-hidden>🟢</div>
+        <div className="land-mark" aria-hidden><span className="brand-dot" /></div>
         <h1>Run your conference’s entire speaker pipeline.</h1>
         <p className="land-tag">
           GreenRoom is open-source speaker &amp; content management — CFPs, reviews, scheduling,

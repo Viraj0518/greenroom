@@ -63,7 +63,7 @@ export function Card({ title, actions, pad = true, className, children }: {
     <section className={cx('card', className)}>
       {(title || actions) && (
         <header className="card-head">
-          <h2 style={{ fontSize: '0.98rem' }}>{title}</h2>
+          <h2>{title}</h2>
           {actions && <div className="row">{actions}</div>}
         </header>
       )}
@@ -131,7 +131,7 @@ export function Modal({ open, onClose, title, wide, children, footer }: {
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div ref={ref} className={cx('modal', wide && 'modal-wide')} role="dialog" aria-modal="true">
         <header className="card-head">
-          <h2 style={{ fontSize: '1rem' }}>{title}</h2>
+          <h2>{title}</h2>
           <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close">✕</Button>
         </header>
         <div className="card-pad">{children}</div>
