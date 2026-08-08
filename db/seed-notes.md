@@ -18,8 +18,9 @@ row counter (…01, …02, …).
 
 ## Users (organizers)
 
-`password_hash` is the literal placeholder `PLACEHOLDER_HASH_demo-greenroom-2026` —
-**backend must replace it** with its real hash of `demo-greenroom-2026` (agreed format TBD).
+All three log in with demo password **`demo-greenroom-2026`** — hashes are in backend's
+format: `pbkdf2$<iterations>$<salt b64>$<key b64>` (PBKDF2-SHA256, 100k iterations,
+WebCrypto), per-user salts.
 
 | id | email | role |
 |---|---|---|
@@ -80,8 +81,11 @@ drag them in during the demo; Terrace is an empty room for drop targets.
 
 - Templates (`bbbb…01–04`): keys `accepted`, `rejected`, `reminder`, `schedule_live`; `{{name}}`-style vars.
 - emails_log: 8 accepted + 2 rejected + 1 reminder, all `status='sent'`, `provider='console'`.
-- Onboarding task keys: `bio`, `headshot`, `slides` (optional), `av_form`. Completion is mixed
-  across speakers 01–08 (s01 = 4/4 … s06 = 0/4 and overdue → dashboard has real signal).
+- Onboarding task keys: `profile`, `headshot`, `slides` (optional), `av_form`. Keys match
+  backend's auto-complete conventions: portal profile save marks `profile`; an asset upload
+  marks the task key equal to its kind (`headshot`/`slides`); `av_form` is completed manually
+  via `POST /api/portal/tasks/av_form/done`. Completion is mixed across speakers 01–08
+  (s01 = 4/4 … s06 = 0/4 and overdue → dashboard has real signal).
 - Resources: `speaker-guide` (public) · `venue-av` (public, **has embed_html** iframe) ·
   `pc-handbook` (internal, `is_public=0` — must NOT appear on public routes).
 - Integrations: one `accelevents` + one `airtable` row, both `not_configured` → graceful no-op.

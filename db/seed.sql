@@ -32,13 +32,13 @@ INSERT INTO events (id, name, slug, starts_on, ends_on, timezone, description, c
 
 ------------------------------------------------------------------------------
 -- Organizers / reviewers
--- password_hash is a PLACEHOLDER — backend replaces with its real hash format
--- (see seed-notes.md). Demo password intended for all three: demo-greenroom-2026
+-- Demo password for all three: demo-greenroom-2026
+-- Hashes are backend's format: pbkdf2$<iterations>$<salt b64>$<key b64> (PBKDF2-SHA256, 100k iters)
 ------------------------------------------------------------------------------
 INSERT INTO users (id, email, name, password_hash, role, created_at) VALUES
-('11111111-1111-4111-8111-111111111101', 'admin@example.com',      'Alex Rivera', 'PLACEHOLDER_HASH_demo-greenroom-2026', 'admin',    '2026-06-01T17:05:00Z'),
-('11111111-1111-4111-8111-111111111102', 'jordan.kim@example.com', 'Jordan Kim',  'PLACEHOLDER_HASH_demo-greenroom-2026', 'reviewer', '2026-06-02T09:00:00Z'),
-('11111111-1111-4111-8111-111111111103', 'sam.osei@example.com',   'Sam Osei',    'PLACEHOLDER_HASH_demo-greenroom-2026', 'reviewer', '2026-06-02T09:10:00Z');
+('11111111-1111-4111-8111-111111111101', 'admin@example.com',      'Alex Rivera', 'pbkdf2$100000$LJHR+iMrUiItV0vHr4rZIA==$axiD+5SCr/V/U6RNBvwrJiNZ2aLzksIljLc88o0su/o=', 'admin',    '2026-06-01T17:05:00Z'),
+('11111111-1111-4111-8111-111111111102', 'jordan.kim@example.com', 'Jordan Kim',  'pbkdf2$100000$5ra3b06aZtCrD0cIjNPW4g==$YG0Yvf9TdpyWmPxg5XiMNttQKn+yndr+4+CVk6B+wP4=', 'reviewer', '2026-06-02T09:00:00Z'),
+('11111111-1111-4111-8111-111111111103', 'sam.osei@example.com',   'Sam Osei',    'pbkdf2$100000$Z41k8KA+6QrnLmV0Saugng==$gDAtVJDjN/FEMewyEt7e/c22cA3bvtvBa9KIUA3vjaE=', 'reviewer', '2026-06-02T09:10:00Z');
 
 ------------------------------------------------------------------------------
 -- CFP form — exercises conditional logic (showIf) and category→track routing
@@ -351,49 +351,49 @@ INSERT INTO emails_log (id, event_id, speaker_id, template_key, subject, status,
 -- Onboarding tasks + per-speaker completion (accepted speakers, mixed states)
 ------------------------------------------------------------------------------
 INSERT INTO onboarding_tasks (id, event_id, key, label, due_at, required) VALUES
-('dddddddd-dddd-4ddd-8ddd-dddddddddd01', '22222222-2222-4222-8222-222222222201', 'bio',      'Complete your bio & tagline',   '2026-09-15T06:59:00Z', 1),
+('dddddddd-dddd-4ddd-8ddd-dddddddddd01', '22222222-2222-4222-8222-222222222201', 'profile',      'Complete your bio & tagline',   '2026-09-15T06:59:00Z', 1),
 ('dddddddd-dddd-4ddd-8ddd-dddddddddd02', '22222222-2222-4222-8222-222222222201', 'headshot', 'Upload your headshot',          '2026-09-15T06:59:00Z', 1),
 ('dddddddd-dddd-4ddd-8ddd-dddddddddd03', '22222222-2222-4222-8222-222222222201', 'slides',   'Upload your slides',            '2026-10-02T06:59:00Z', 0),
 ('dddddddd-dddd-4ddd-8ddd-dddddddddd04', '22222222-2222-4222-8222-222222222201', 'av_form',  'Submit AV & stage requirements','2026-09-22T06:59:00Z', 1);
 
 INSERT INTO speaker_tasks (id, speaker_id, task_key, done, done_at) VALUES
 -- s01 Priya: everything done (the model speaker)
-('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee01', '44444444-4444-4444-8444-444444444401', 'bio',      1, '2026-07-23T09:00:00Z'),
+('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee01', '44444444-4444-4444-8444-444444444401', 'profile',      1, '2026-07-23T09:00:00Z'),
 ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee02', '44444444-4444-4444-8444-444444444401', 'headshot', 1, '2026-07-23T09:05:00Z'),
 ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee03', '44444444-4444-4444-8444-444444444401', 'slides',   1, '2026-08-05T18:20:00Z'),
 ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee04', '44444444-4444-4444-8444-444444444401', 'av_form',  1, '2026-07-23T09:10:00Z'),
 -- s02 Jonas: bio + headshot
-('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee05', '44444444-4444-4444-8444-444444444402', 'bio',      1, '2026-07-24T11:00:00Z'),
+('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee05', '44444444-4444-4444-8444-444444444402', 'profile',      1, '2026-07-24T11:00:00Z'),
 ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee06', '44444444-4444-4444-8444-444444444402', 'headshot', 1, '2026-07-24T11:04:00Z'),
 ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee07', '44444444-4444-4444-8444-444444444402', 'slides',   0, NULL),
 ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee08', '44444444-4444-4444-8444-444444444402', 'av_form',  0, NULL),
 -- s03 Amara: bio + headshot
-('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee09', '44444444-4444-4444-8444-444444444403', 'bio',      1, '2026-07-25T14:30:00Z'),
+('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee09', '44444444-4444-4444-8444-444444444403', 'profile',      1, '2026-07-25T14:30:00Z'),
 ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee10', '44444444-4444-4444-8444-444444444403', 'headshot', 1, '2026-07-25T14:33:00Z'),
 ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee11', '44444444-4444-4444-8444-444444444403', 'slides',   0, NULL),
 ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee12', '44444444-4444-4444-8444-444444444403', 'av_form',  0, NULL),
 -- s04 Diego: bio only
-('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee13', '44444444-4444-4444-8444-444444444404', 'bio',      1, '2026-07-28T08:15:00Z'),
+('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee13', '44444444-4444-4444-8444-444444444404', 'profile',      1, '2026-07-28T08:15:00Z'),
 ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee14', '44444444-4444-4444-8444-444444444404', 'headshot', 0, NULL),
 ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee15', '44444444-4444-4444-8444-444444444404', 'slides',   0, NULL),
 ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee16', '44444444-4444-4444-8444-444444444404', 'av_form',  0, NULL),
 -- s05 Mei-Ling: bio + headshot + AV
-('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee17', '44444444-4444-4444-8444-444444444405', 'bio',      1, '2026-07-26T19:45:00Z'),
+('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee17', '44444444-4444-4444-8444-444444444405', 'profile',      1, '2026-07-26T19:45:00Z'),
 ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee18', '44444444-4444-4444-8444-444444444405', 'headshot', 1, '2026-07-26T19:50:00Z'),
 ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee19', '44444444-4444-4444-8444-444444444405', 'slides',   0, NULL),
 ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee20', '44444444-4444-4444-8444-444444444405', 'av_form',  1, '2026-07-26T19:55:00Z'),
 -- s06 Tomás: nothing yet (drives "overdue" UI + the reminder email above)
-('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee21', '44444444-4444-4444-8444-444444444406', 'bio',      0, NULL),
+('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee21', '44444444-4444-4444-8444-444444444406', 'profile',      0, NULL),
 ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee22', '44444444-4444-4444-8444-444444444406', 'headshot', 0, NULL),
 ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee23', '44444444-4444-4444-8444-444444444406', 'slides',   0, NULL),
 ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee24', '44444444-4444-4444-8444-444444444406', 'av_form',  0, NULL),
 -- s07 Nadia: bio only
-('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee25', '44444444-4444-4444-8444-444444444407', 'bio',      1, '2026-07-30T07:30:00Z'),
+('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee25', '44444444-4444-4444-8444-444444444407', 'profile',      1, '2026-07-30T07:30:00Z'),
 ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee26', '44444444-4444-4444-8444-444444444407', 'headshot', 0, NULL),
 ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee27', '44444444-4444-4444-8444-444444444407', 'slides',   0, NULL),
 ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee28', '44444444-4444-4444-8444-444444444407', 'av_form',  0, NULL),
 -- s08 Kwame: bio + AV
-('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee29', '44444444-4444-4444-8444-444444444408', 'bio',      1, '2026-08-02T21:10:00Z'),
+('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee29', '44444444-4444-4444-8444-444444444408', 'profile',      1, '2026-08-02T21:10:00Z'),
 ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee30', '44444444-4444-4444-8444-444444444408', 'headshot', 0, NULL),
 ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee31', '44444444-4444-4444-8444-444444444408', 'slides',   0, NULL),
 ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeee32', '44444444-4444-4444-8444-444444444408', 'av_form',  1, '2026-08-02T21:14:00Z');
