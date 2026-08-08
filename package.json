@@ -19,6 +19,7 @@
     "test": "vitest run -c tests/vitest.config.ts --passWithNoTests",
     "test:watch": "vitest -c tests/vitest.config.ts",
     "smoke": "node tests/smoke.mjs",
+    "size": "node scripts/check-bundle-size.mjs",
     "typecheck": "tsc --noEmit",
     "db:migrate:local": "wrangler d1 migrations apply greenroom-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply greenroom-db --remote"
