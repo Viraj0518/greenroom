@@ -3,6 +3,12 @@
 Everything the entry form needs. Target: **Wednesday Aug 12, before 10 PM PT.**
 Submit ONLY after QA's explicit GO on the candidate sha (M5 gate).
 
+> **✅ GATE PASSED — CLEARED TO SUBMIT (2026-08-08)**
+> Candidate sha: `bca6296` (= public main tip, modulo the docs-only stamp commit)
+> Immutable deployment: https://f054c3a3.greenroom-dev.pages.dev (Pages Source verified = bca6296; QA content-hash-matched the deployed bundle)
+> Alias: https://greenroom-dev.pages.dev (serving the same deployment)
+> QA GO: issued after full mutating suite on a quiesced bca6296 checkout + read-only staging leg (18/18, curated-freshness green)
+
 ## Form fields
 
 | Field | Value |
@@ -48,9 +54,9 @@ Submit ONLY after QA's explicit GO on the candidate sha (M5 gate).
 
 ## Pre-submit checklist (maintainer)
 
-- [ ] UI pencils-down received
-- [ ] Candidate sha announced to QA (+ immutable deployment URL, Source verified)
-- [ ] QA GO received ← **hard gate, no GO no submit**
-- [ ] Final deploy == candidate sha; smoke 15/15 on the deployment URL
-- [ ] README links all resolve (walkthrough tokens/ids against live DB)
-- [ ] Operator submits the form
+- [x] UI pencils-down received
+- [x] Candidate sha announced to QA (+ immutable deployment URL, Source verified)
+- [x] QA GO received ← **hard gate, no GO no submit**
+- [x] Final deploy == candidate sha; read-only smoke 18/18 on both alias and immutable URL
+- [x] README links all resolve (walkthrough tokens/ids verified against live DB)
+- [ ] Operator submits the form ← **the only remaining action**

@@ -215,16 +215,6 @@ Storage-dependent routes return 501 `code: "storage_not_configured"` while R2 is
    `greenroom-files`, creds in `~/greenroom/.dev.vars` (gitignored). `assets.r2_key` stays as-is
    and holds the provider-agnostic object key. API surface unchanged.
 
-8. **AI review adapter chain + API docs (coordinator, 2026-08-08).**
-   - `AIReviewer` selection: `ANTHROPIC_API_KEY` present → anthropic (`claude-sonnet-5`);
-     else Workers AI binding `AI` present → workers-ai (`@cf/meta/llama-3.1-8b-instruct`);
-     else 501 "not configured". Response notes which engine produced the review
-     (`reviews.comment` prefixed `[ai:<engine>]` or an `engine` field — backend's pick, but
-     consistent). Workers AI keeps the demo self-contained on Cloudflare (bonus points).
-   - Public API description: `GET /api/openapi.json` (hand-written OpenAPI 3, kept honest against
-     this file) + server-rendered `GET /api/docs` page (pin #6 style: self-contained HTML, no
-     docs-bundle dependency) with auth modes and curl examples.
-
 8. **CFP confirmation must never dead-end (coordinator, 2026-08-08).** The public submit 201
    response includes `portal_url` (the submitting speaker's own magic-link URL — safe: it goes
    only to the person who owns it) and `email_delivery`: `"real"` (provider actually delivers,
@@ -233,15 +223,30 @@ Storage-dependent routes return 501 `code: "storage_not_configured"` while R2 is
    says the link is their access key, when `"real"` it adds "we've also emailed it to you".
    Judges/self-hosters get a working flow with zero email configuration.
 
-9. **Active-speaker semantics (coordinator, 2026-08-08).** Organizer aggregates — the dashboard
-   matrix and its counts (`speakers`, `complete_speakers`, onboarding %) — include ONLY speakers
-   with ≥1 non-withdrawn submission for the event. Speakers whose submissions are all withdrawn
-   (e.g. cleaned-up test entries) drop out of dashboards automatically; their rows stay in the DB.
-   The submissions pipeline funnel may still show the withdrawn count as a summary line. Public
-   speaker surfaces already filter to accepted; unchanged.
+9. **AI review adapter chain (coordinator reconciliation, 2026-08-08).** `AIReviewer`
+   selection: `ANTHROPIC_API_KEY` present → anthropic (`claude-sonnet-5`); else Workers AI
+   binding `AI` present → workers-ai (`@cf/meta/llama-3.3-70b-instruct-fp8-fast` — the
+   originally proposed `llama-3.1-8b-instruct` was deprecated upstream 2026-05-30); else 501
+   "not configured". Adapter/upstream failures surface as 502 `code: "ai_error"`, config absence
+   as 501 — never a 500. AI reviews store `reviewer_id='ai'`, `ai=1`. Workers AI keeps the demo
+   self-contained on Cloudflare.
+
+## Roadmap — agreed ideas NOT implemented in v1 (post-submission)
+
+These were proposed during development and deliberately kept out of the frozen v1 candidate;
+the deployed code does NOT implement them:
+
+- **Engine marker on AI reviews** (an `engine` field or `[ai:<engine>]` comment prefix) —
+  v1 AI reviews carry `reviewer_id='ai'` / `ai=1` only.
+- **Public API docs** — `GET /api/openapi.json` (OpenAPI 3) + server-rendered `GET /api/docs`.
+  Neither endpoint exists in v1.
+- **Active-speaker dashboard semantics** — organizer dashboard aggregates counting only
+  speakers with ≥1 non-withdrawn submission. Implemented, ruled out of the v1 freeze
+  (no test coverage; the curated re-seed removed the motivating case), and stashed for
+  v1.1 with QA coverage. v1 dashboards count all speakers for the event.
 
 ## Bindings (wrangler.toml names — maintainer owns file, these names are fixed)
 - D1: `DB` (database `greenroom-db`)
 - R2: `FILES` (bucket `greenroom-files`) — commented out until billing unblocks; see pin #7
-- Workers AI: `AI` — optional, enables the workers-ai reviewer per pin #8
+- Workers AI: `AI` — optional, enables the workers-ai reviewer per pin #9
 - Vars/secrets: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` (Pages secrets + .dev.vars), `RESEND_API_KEY?`, `ANTHROPIC_API_KEY?`, `APP_BASE_URL`
