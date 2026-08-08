@@ -7,7 +7,7 @@ import { api } from '../../api'
 import { useOrg } from './OrgLayout'
 import type { Conflict, Room, ScheduleSlot, Submission, Track } from '../../types'
 import { dayKey, dayRange, fmtDate, fmtTime, tzMinutesOfDay, zonedToUtc } from '../../lib'
-import { Badge, Card, Select, Spinner, Tabs, useToast } from '../../components/ui'
+import { Badge, Button, Card, Select, Spinner, Tabs, useToast } from '../../components/ui'
 import '../../styles/schedule.css'
 
 const DAY_START = 8 * 60   // 08:00 event-local
@@ -139,8 +139,18 @@ export function SchedulePage() {
 
       {conflicts.length > 0 && (
         <div className="conflict-banner" role="alert">
-          <strong>⚠ {conflicts.length} conflict{conflicts.length > 1 ? 's' : ''}:</strong>{' '}
-          {conflicts.map((c) => c.reason).join(' · ')}
+          <strong>⚠ {conflicts.length} conflict{conflicts.length > 1 ? 's' : ''}</strong>
+          <ul style={{ listStyle: 'none', margin: '6px 0 0', padding: 0 }} className="stack">
+            {conflicts.map((c, i) => (
+              <li key={i} className="spread" style={{ gap: 10 }}>
+                <span>{c.reason}</span>
+                <Button size="sm" onClick={() => {
+                  const sl = slots.find((x) => c.slotIds.includes(x.id))
+                  if (sl) { setView('day'); setDay(dayKey(sl.starts_at, tz)) }
+                }}>Show</Button>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

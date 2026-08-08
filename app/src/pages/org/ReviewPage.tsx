@@ -3,7 +3,7 @@ import { api, ApiError } from '../../api'
 import { useOrg } from './OrgLayout'
 import type { QueueRow, Review, ReviewRound, Rubric } from '../../types'
 import { asObj, rubric as getRubric } from '../../types'
-import { Badge, Button, Card, EmptyState, Select, Spinner, Textarea, useToast } from '../../components/ui'
+import { Badge, Button, Card, EmptyState, Progress, Select, Spinner, Textarea, useToast } from '../../components/ui'
 
 export function ReviewPage() {
   const { event } = useOrg()
@@ -45,6 +45,24 @@ export function ReviewPage() {
           {queue && <span className="muted small">{reviewedCount}/{queue.length} reviewed by you</span>}
         </div>
       </div>
+
+      {round && queue && queue.length > 0 && (
+        <Card className="card-pad" pad={false}>
+          <div className="spread" style={{ padding: '12px 18px', gap: 18, flexWrap: 'wrap' }}>
+            <span className="row" style={{ gap: 10 }}>
+              <strong>{round.name}</strong>
+              {round.is_open ? <Badge tone="badge-ok">open</Badge> : <Badge>closed</Badge>}
+            </span>
+            <span className="row grow" style={{ gap: 10, maxWidth: 420 }}>
+              <div className="grow"><Progress value={reviewedCount} max={queue.length} /></div>
+              <span className="muted small" style={{ flex: 'none' }}>
+                {Math.round((reviewedCount / queue.length) * 100)}% reviewed
+              </span>
+            </span>
+          </div>
+        </Card>
+      )}
+      <div style={{ height: 14 }} />
 
       {!queue ? <Spinner /> : queue.length === 0 ? (
         <EmptyState glyph="🎉" title="Queue is empty">Nothing awaiting review in this round.</EmptyState>

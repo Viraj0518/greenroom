@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api } from '../../api'
 import { useOrg } from './OrgLayout'
 import type { EmailLogRow, EmailTemplate, Speaker, Submission } from '../../types'
@@ -25,10 +26,22 @@ export function CommsPage() {
   )
 }
 
-const SAMPLE_VARS = {
+// Every variable the backend's renderVars supports (comms.ts), plus legacy
+// aliases seen in seeded templates — the preview should never show a raw {{var}}.
+const SAMPLE_VARS: Record<string, string> = {
   name: 'Ada Okafor',
+  email: 'ada@example.dev',
+  event: 'DevConf 2026',
+  event_name: 'DevConf 2026',
+  title: 'Taming Tail Latency: p999 in Practice',
   talk_title: 'Taming Tail Latency: p999 in Practice',
+  submission_title: 'Taming Tail Latency: p999 in Practice',
+  titles: 'Taming Tail Latency: p999 in Practice',
   portal_url: 'https://your-event.example/portal?token=…',
+  ics_url: 'https://your-event.example/api/public/ics/…',
+  ics_link: 'https://your-event.example/api/public/ics/…',
+  gcal_link: 'https://calendar.google.com/…',
+  outlook_link: 'https://outlook.live.com/…',
   due_date: 'Oct 1',
 }
 
@@ -39,6 +52,12 @@ function TemplatesTab({ eventId }: { eventId: string }) {
   const [draft, setDraft] = useState<{ subject: string; body_md: string } | null>(null)
   const [busy, setBusy] = useState(false)
   const [sendOpen, setSendOpen] = useState(false)
+  // "Remind" deep-link from the dashboard matrix: /org/comms?speakers=<id,…>
+  const [params] = useSearchParams()
+  const initialSpeakers = useMemo(() => params.get('speakers')?.split(',').filter(Boolean) ?? [], [params])
+  useEffect(() => {
+    if (initialSpeakers.length > 0) setSendOpen(true)
+  }, [initialSpeakers])
 
   useEffect(() => {
     api.listTemplates(eventId).then((ts) => {
@@ -97,19 +116,21 @@ function TemplatesTab({ eventId }: { eventId: string }) {
         </div>
       )}
 
-      {tpl && <SendModal open={sendOpen} onClose={() => setSendOpen(false)} eventId={eventId} tpl={tpl} />}
+      {tpl && <SendModal open={sendOpen} onClose={() => setSendOpen(false)} eventId={eventId} tpl={tpl}
+        initialSpeakers={initialSpeakers} />}
     </div>
   )
 }
 
-function SendModal({ open, onClose, eventId, tpl }: {
+function SendModal({ open, onClose, eventId, tpl, initialSpeakers = [] }: {
   open: boolean; onClose: () => void; eventId: string; tpl: EmailTemplate
+  initialSpeakers?: string[]
 }) {
   const toast = useToast()
-  const [mode, setMode] = useState<'status' | 'pick'>('status')
+  const [mode, setMode] = useState<'status' | 'pick'>(initialSpeakers.length ? 'pick' : 'status')
   const [status, setStatus] = useState('accepted')
   const [subs, setSubs] = useState<Submission[]>([])
-  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [picked, setPicked] = useState<Set<string>>(new Set(initialSpeakers))
   const [includeIcs, setIncludeIcs] = useState(tpl.key === 'schedule_invite')
   const [busy, setBusy] = useState(false)
 

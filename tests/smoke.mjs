@@ -10,11 +10,15 @@
  */
 import { SEED } from './fixtures.mjs';
 
-const base = (process.argv[2] ?? '').replace(/\/+$/, '');
+const args = process.argv.slice(2);
+const readOnly = args.includes('--read-only');
+const base = (args.find((a) => !a.startsWith('--')) ?? '').replace(/\/+$/, '');
 if (!base) {
-  console.error('usage: node tests/smoke.mjs <deployed-base-url>');
+  console.error('usage: node tests/smoke.mjs <deployed-base-url> [--read-only]');
+  console.error('  --read-only: no mutations (post-re-seed staging mode); asserts curated dataset counts');
   process.exit(2);
 }
+if (readOnly) console.log('MODE: read-only (no mutations; curated-count assertions active)\n');
 
 const results = [];
 async function check(name, fn) {
@@ -126,23 +130,49 @@ await check('organizer login works against seeded example.com admin too', async 
   assert(res.status === 200, `login status ${res.status}`);
 });
 
-await check('pin #8: CFP submit returns portal_url + email_delivery', async () => {
-  const res = await fetch(`${base}/api/public/forms/form_cfp/submit`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      speaker: { email: `smoke-pin8-${Date.now()}@smoke.greenroom.test`, name: 'Smoke Test' },
-      answers: { title: 'Smoke pin8 (ignore)', abstract: 'probe', category: 'AI & ML',
-                 session_format: 'Talk (30 min)', audience_level: 'Intermediate' },
-    }),
-  });
-  const body = JSON.parse(await res.text());
-  assert(res.status === 201, `status ${res.status}`);
-  assert(typeof body.portal_url === 'string' && body.portal_url.includes('token='), 'no portal_url with token');
-  assert(['logged', 'real'].includes(body.email_delivery), `email_delivery=${body.email_delivery}`);
-});
+// Self-cleaning for mutating checks: track created submissions, withdraw at the end.
+const createdEmails = [];
 
-if (SEED.published && SEED.formId) {
+if (!readOnly) {
+  await check('pin #8: CFP submit returns portal_url + email_delivery', async () => {
+    const email = `smoke-pin8-${Date.now()}@smoke.greenroom.test`;
+    createdEmails.push(email);
+    const res = await fetch(`${base}/api/public/forms/form_cfp/submit`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        speaker: { email, name: 'Smoke Test' },
+        answers: { title: 'Smoke pin8 (ignore)', abstract: 'probe', category: 'AI & ML',
+                   session_format: 'Talk (30 min)', audience_level: 'Intermediate' },
+      }),
+    });
+    const body = JSON.parse(await res.text());
+    assert(res.status === 201, `status ${res.status}`);
+    assert(typeof body.portal_url === 'string' && body.portal_url.includes('token='), 'no portal_url with token');
+    assert(['logged', 'real'].includes(body.email_delivery), `email_delivery=${body.email_delivery}`);
+  });
+}
+async function selfClean() {
+  if (!createdEmails.length) return;
+  const login = await fetch(`${base}/api/auth/login`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: 'demo@greenroom.dev', password: 'greenroom-demo' }),
+  });
+  const cookie = (login.headers.get('set-cookie') ?? '').split(';')[0];
+  const subsRes = await fetch(`${base}/api/events/${SEED.eventId}/submissions`, { headers: { cookie } });
+  const subs = (await subsRes.json())?.submissions ?? [];
+  for (const s of subs) {
+    if (createdEmails.includes(s.speaker_email) && s.status !== 'withdrawn') {
+      const r = await fetch(`${base}/api/submissions/${s.id}`, {
+        method: 'PATCH', headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ status: 'withdrawn' }),
+      });
+      console.log(`  🧹 withdrew smoke submission "${s.title}": ${r.status}`);
+    }
+  }
+}
+
+if (!readOnly && SEED.published && SEED.formId) {
   await check('CFP submit end-to-end (answers built from the live form spec)', async () => {
     const specRes = await get(`/api/public/forms/${SEED.formId}`);
     assert(specRes.status === 200, `form spec fetch: status ${specRes.status}`);
@@ -164,6 +194,7 @@ if (SEED.published && SEED.formId) {
     }
 
     const email = `smoke-${Date.now()}@smoke.greenroom.test`;
+    createdEmails.push(email);
     const res = await fetch(`${base}/api/public/forms/${SEED.formId}/submit`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -171,8 +202,10 @@ if (SEED.published && SEED.formId) {
     });
     assert(res.status < 300, `status ${res.status}: ${await res.text()}`);
   });
-} else {
+} else if (!readOnly) {
   console.log('  ⚠️  seed fixtures not published yet — skipping CFP submit check');
+} else {
+  console.log('  ⏭  read-only mode: CFP submit checks skipped (covered by the local mutating leg)');
 }
 
 if (SEED.published && SEED.speakerId && SEED.speakerToken) {

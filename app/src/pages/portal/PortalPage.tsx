@@ -1,20 +1,24 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api, ApiError, assetUrl, icsUrl, setSpeakerToken } from '../../api'
-import type { Asset, PortalMe } from '../../types'
-import { fmtBytes, fmtDate, fmtDateTime, isOverdue } from '../../lib'
+import type { Asset, PortalMe, Resource } from '../../types'
+import { embedHtml, fmtBytes, fmtDate, fmtDateTime, isOverdue, md } from '../../lib'
 import {
-  Avatar, Badge, Button, Card, EmptyState, Field, Input, Progress, Spinner, Textarea, useToast,
+  Avatar, Badge, Button, Card, EmptyState, Field, Input, Progress, Spinner, Tabs, Textarea, useToast,
 } from '../../components/ui'
 import { STATUS_BADGE, STATUS_LABELS } from '../../types'
 
 const TOKEN_KEY = 'gr-speaker-token'
+
+// Tabbed "resource center" IA: Home / Sessions / Profile / Tasks / Files / Resources.
+type PortalTab = 'home' | 'sessions' | 'profile' | 'tasks' | 'files' | 'resources'
 
 export function PortalPage() {
   const [params] = useSearchParams()
   const toast = useToast()
   const [me, setMe] = useState<PortalMe | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  const [tab, setTab] = useState<PortalTab>('home')
 
   useEffect(() => {
     const token = params.get('token') ?? localStorage.getItem(TOKEN_KEY)
@@ -40,10 +44,46 @@ export function PortalPage() {
 
   const done = me.tasks.filter((t) => t.done).length
   const headshot = me.assets.find((a) => a.kind === 'headshot')
+  const nextUp = me.tasks.filter((t) => !t.done).slice(0, 3)
+
+  const checklist = (
+    <Card title={`Onboarding checklist — ${done}/${me.tasks.length} done`}>
+      <Progress value={done} max={me.tasks.length} />
+      <ul style={{ listStyle: 'none', padding: 0, marginTop: 14 }} className="stack">
+        {me.tasks.map((t) => {
+          const overdue = !t.done && isOverdue(t.due_at)
+          return (
+            <li key={t.key} className="spread" style={{ gap: 10 }}>
+              <span className="row" style={{ gap: 9 }}>
+                <span aria-hidden style={{
+                  width: 20, height: 20, borderRadius: '50%', flex: 'none',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12,
+                  background: t.done ? 'var(--ok-soft)' : 'var(--surface-3)',
+                  color: t.done ? 'var(--ok)' : 'var(--faint)',
+                }}>{t.done ? '✓' : ''}</span>
+                <span style={{ textDecoration: t.done ? 'line-through' : undefined }}>
+                  {t.label}
+                  {!t.required && <span className="faint small"> (optional)</span>}
+                </span>
+              </span>
+              <span className="row" style={{ gap: 8 }}>
+                {overdue
+                  ? <Badge tone="badge-danger">overdue · was due {fmtDate(t.due_at)}</Badge>
+                  : t.due_at && !t.done ? <span className="faint small">due {fmtDate(t.due_at)}</span> : null}
+                {!t.done && !['headshot', 'slides', 'bio'].includes(t.key) && (
+                  <MarkDone taskKey={t.key} onDone={setMe} />
+                )}
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+    </Card>
+  )
 
   return (
     <Shell>
-      <header className="row" style={{ marginBottom: 20, gap: 14 }}>
+      <header className="row" style={{ marginBottom: 16, gap: 14 }}>
         <Avatar name={me.speaker.name} src={headshot ? assetUrl(headshot.id) : null} size={52} />
         <div className="grow">
           <h1>Hi, {me.speaker.name.split(' ')[0]} 👋</h1>
@@ -51,84 +91,150 @@ export function PortalPage() {
         </div>
       </header>
 
-      <div className="stack" style={{ gap: 16 }}>
-        <Card title={`Onboarding checklist — ${done}/${me.tasks.length} done`}>
-          <Progress value={done} max={me.tasks.length} />
-          <ul style={{ listStyle: 'none', padding: 0, marginTop: 14 }} className="stack">
-            {me.tasks.map((t) => {
-              const overdue = !t.done && isOverdue(t.due_at)
-              return (
-                <li key={t.key} className="spread" style={{ gap: 10 }}>
-                  <span className="row" style={{ gap: 9 }}>
-                    <span aria-hidden style={{
-                      width: 20, height: 20, borderRadius: '50%', flex: 'none',
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12,
-                      background: t.done ? 'var(--ok-soft)' : 'var(--surface-3)',
-                      color: t.done ? 'var(--ok)' : 'var(--faint)',
-                    }}>{t.done ? '✓' : ''}</span>
-                    <span style={{ textDecoration: t.done ? 'line-through' : undefined }}>
-                      {t.label}
-                      {!t.required && <span className="faint small"> (optional)</span>}
-                    </span>
-                  </span>
-                  <span className="row" style={{ gap: 8 }}>
-                    {overdue
-                      ? <Badge tone="badge-danger">overdue · was due {fmtDate(t.due_at)}</Badge>
-                      : t.due_at && !t.done ? <span className="faint small">due {fmtDate(t.due_at)}</span> : null}
-                    {!t.done && !['headshot', 'slides', 'bio'].includes(t.key) && (
-                      <MarkDone taskKey={t.key} onDone={setMe} />
-                    )}
-                  </span>
-                </li>
-              )
-            })}
-          </ul>
-        </Card>
+      <Tabs value={tab} onChange={setTab} tabs={[
+        { key: 'home', label: 'Home' },
+        { key: 'sessions', label: 'Sessions' },
+        { key: 'profile', label: 'Profile' },
+        { key: 'tasks', label: `Tasks${done < me.tasks.length ? ` (${me.tasks.length - done})` : ''}` },
+        { key: 'files', label: 'Files' },
+        { key: 'resources', label: 'Resources' },
+      ]} />
 
-        <ProfileCard me={me} onSaved={(m) => { setMe(m); toast('Profile saved ✓') }} />
-
-        <Card title="Files">
-          <div className="stack" style={{ gap: 14 }}>
-            <UploadRow label="Headshot" hint="Square JPG/PNG, ≥800px. Shown in the public speaker gallery."
-              kind="headshot" accept="image/*" assets={me.assets} onChange={setMe} />
-            <UploadRow label="Slides" hint="PDF preferred, 16:9." kind="slides"
-              accept=".pdf,.key,.pptx,application/pdf" assets={me.assets} onChange={setMe} />
-            <UploadRow label="Supporting documents" hint="Anything else the organizers should have."
-              kind="document" accept="*/*" assets={me.assets} onChange={setMe} />
-          </div>
-        </Card>
-
-        <Card title="Your submissions">
-          {me.submissions.length === 0
-            ? <EmptyState glyph="📝" title="No submissions yet" />
-            : (
-              <ul style={{ listStyle: 'none', padding: 0 }} className="stack">
-                {me.submissions.map((s) => (
-                  <li key={s.id}>
-                    <div className="spread">
-                      <span className="grow">
-                        <strong>{s.title}</strong>
-                        {s.track && <span className="muted small"> · {s.track}</span>}
+      <div className="stack" style={{ gap: 16, marginTop: 16 }}>
+        {tab === 'home' && (
+          <>
+            <Card title="Your progress">
+              <Progress value={done} max={me.tasks.length} />
+              <p className="muted small" style={{ marginTop: 8 }}>
+                {done === me.tasks.length
+                  ? 'All set — you’re ready for the event 🎉'
+                  : `${me.tasks.length - done} task${me.tasks.length - done === 1 ? '' : 's'} to go.`}
+              </p>
+              {nextUp.length > 0 && (
+                <ul style={{ listStyle: 'none', padding: 0, marginTop: 10 }} className="stack">
+                  {nextUp.map((t) => (
+                    <li key={t.key} className="spread small">
+                      <span>→ {t.label}</span>
+                      <span className="row" style={{ gap: 8 }}>
+                        {t.due_at && (
+                          <span className={isOverdue(t.due_at) ? '' : 'faint'}
+                            style={isOverdue(t.due_at) ? { color: 'var(--danger)' } : undefined}>
+                            due {fmtDate(t.due_at)}
+                          </span>
+                        )}
+                        <Button size="sm" variant="ghost" onClick={() => setTab('tasks')}>Open</Button>
                       </span>
-                      <Badge tone={STATUS_BADGE[s.status]}>{STATUS_LABELS[s.status]}</Badge>
-                    </div>
-                    {s.slot && (
-                      <div className="row-wrap small muted" style={{ marginTop: 4 }}>
-                        <span>🗓 {fmtDateTime(s.slot.starts_at)}{s.slot.room ? ` · ${s.slot.room}` : ''}</span>
-                        {s.gcal_link && <a className="btn btn-sm" href={s.gcal_link} target="_blank" rel="noreferrer">Google Calendar</a>}
-                        {s.outlook_link && <a className="btn btn-sm" href={s.outlook_link} target="_blank" rel="noreferrer">Outlook</a>}
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+            {me.submissions.some((s) => s.status === 'accepted') && (
+              <Card title="You’re speaking!">
+                <ul style={{ listStyle: 'none', padding: 0 }} className="stack">
+                  {me.submissions.filter((s) => s.status === 'accepted').map((s) => (
+                    <li key={s.id} className="spread small">
+                      <strong>{s.title}</strong>
+                      {s.slot
+                        ? <span className="muted">{fmtDateTime(s.slot.starts_at)}{s.slot.room ? ` · ${s.slot.room}` : ''}</span>
+                        : <span className="faint">time TBA</span>}
+                    </li>
+                  ))}
+                </ul>
+                <CalendarLinks speakerId={me.speaker.id} eventName={me.event.name} icsPath={me.ics_url} />
+              </Card>
             )}
-          {me.submissions.some((s) => s.status === 'accepted') && (
-            <CalendarLinks speakerId={me.speaker.id} eventName={me.event.name} icsPath={me.ics_url} />
-          )}
-        </Card>
+          </>
+        )}
+
+        {tab === 'sessions' && (
+          <Card title="Your submissions">
+            {me.submissions.length === 0
+              ? <EmptyState glyph="📝" title="No submissions yet" />
+              : (
+                <ul style={{ listStyle: 'none', padding: 0 }} className="stack">
+                  {me.submissions.map((s) => (
+                    <li key={s.id}>
+                      <div className="spread">
+                        <span className="grow">
+                          <strong>{s.title}</strong>
+                          {s.track && <span className="muted small"> · {s.track}</span>}
+                        </span>
+                        <Badge tone={STATUS_BADGE[s.status]}>{STATUS_LABELS[s.status]}</Badge>
+                      </div>
+                      {s.slot && (
+                        <div className="row-wrap small muted" style={{ marginTop: 4 }}>
+                          <span>🗓 {fmtDateTime(s.slot.starts_at)}{s.slot.room ? ` · ${s.slot.room}` : ''}</span>
+                          {s.gcal_link && <a className="btn btn-sm" href={s.gcal_link} target="_blank" rel="noreferrer">Google Calendar</a>}
+                          {s.outlook_link && <a className="btn btn-sm" href={s.outlook_link} target="_blank" rel="noreferrer">Outlook</a>}
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            {me.submissions.some((s) => s.status === 'accepted') && (
+              <CalendarLinks speakerId={me.speaker.id} eventName={me.event.name} icsPath={me.ics_url} />
+            )}
+          </Card>
+        )}
+
+        {tab === 'profile' && <ProfileCard me={me} onSaved={(m) => { setMe(m); toast('Profile saved ✓') }} />}
+
+        {tab === 'tasks' && checklist}
+
+        {tab === 'files' && (
+          <Card title="Files">
+            <div className="stack" style={{ gap: 14 }}>
+              <UploadRow label="Headshot" hint="Square JPG/PNG, ≥800px. Shown in the public speaker gallery."
+                kind="headshot" accept="image/*" assets={me.assets} onChange={setMe} />
+              <UploadRow label="Slides" hint="PDF preferred, 16:9." kind="slides"
+                accept=".pdf,.key,.pptx,application/pdf" assets={me.assets} onChange={setMe} />
+              <UploadRow label="Supporting documents" hint="Anything else the organizers should have."
+                kind="document" accept="*/*" assets={me.assets} onChange={setMe} />
+            </div>
+          </Card>
+        )}
+
+        {tab === 'resources' && <ResourcesTab slug={me.event.slug} />}
       </div>
     </Shell>
+  )
+}
+
+/** Public wiki pages for speakers (speaker guide, AV specs, …). */
+function ResourcesTab({ slug }: { slug: string }) {
+  const [pages, setPages] = useState<Resource[] | null>(null)
+  const [open, setOpen] = useState<string | null>(null)
+  useEffect(() => {
+    api.publicResources(slug).then((r) => {
+      setPages(r.resources)
+      setOpen((cur) => cur ?? r.resources[0]?.id ?? null)
+    }).catch(() => setPages([]))
+  }, [slug])
+
+  if (!pages) return <Spinner />
+  if (pages.length === 0) return <EmptyState glyph="📄" title="No resources published yet" />
+
+  const current = pages.find((p) => p.id === open)
+  return (
+    <div className="stack" style={{ gap: 12 }}>
+      <div className="row-wrap">
+        {pages.map((p) => (
+          <Button key={p.id} size="sm" variant={p.id === open ? 'primary' : 'default'} onClick={() => setOpen(p.id)}>
+            {p.title}
+          </Button>
+        ))}
+      </div>
+      {current && (
+        <Card>
+          <div className="markdown" dangerouslySetInnerHTML={{ __html: md(current.body_md) }} />
+          {current.embed_html && (
+            <div style={{ marginTop: 14 }} dangerouslySetInnerHTML={{ __html: embedHtml(current.embed_html) }} />
+          )}
+        </Card>
+      )}
+    </div>
   )
 }
 

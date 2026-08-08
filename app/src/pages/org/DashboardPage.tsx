@@ -1,17 +1,38 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../../api'
 import { useOrg } from './OrgLayout'
-import type { DashboardData } from '../../types'
+import type { DashboardData, Submission, Track } from '../../types'
+import { STATUS_LABELS } from '../../types'
 import { fmtDate, isOverdue } from '../../lib'
-import { Avatar, Badge, Card, EmptyState, Spinner } from '../../components/ui'
+import { Avatar, Badge, Button, Card, EmptyState, Spinner } from '../../components/ui'
+
+// Composition mirrors the reference product's home: stat row → pipeline funnel
+// + track distribution → speaker-tasks matrix with per-row remind actions.
+
+const FUNNEL_STAGES = ['submitted', 'in_review', 'accepted'] as const
 
 export function DashboardPage() {
   const { event } = useOrg()
+  const nav = useNavigate()
   const [data, setData] = useState<DashboardData | null>(null)
+  const [subs, setSubs] = useState<Submission[]>([])
+  const [tracks, setTracks] = useState<Track[]>([])
   const [err, setErr] = useState(false)
 
-  useEffect(() => { api.dashboard(event.id).then(setData).catch(() => setErr(true)) }, [event.id])
+  useEffect(() => {
+    api.dashboard(event.id).then(setData).catch(() => setErr(true))
+    api.listSubmissions(event.id).then(setSubs).catch(() => {})
+    api.listTracks(event.id).then(setTracks).catch(() => {})
+  }, [event.id])
+
+  const byTrack = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const s of subs.filter((x) => x.status === 'accepted')) {
+      m.set(s.track ?? 'Unassigned', (m.get(s.track ?? 'Unassigned') ?? 0) + 1)
+    }
+    return [...m.entries()].sort((a, b) => b[1] - a[1])
+  }, [subs])
 
   if (err) return <EmptyState glyph="⚠️" title="Could not load the dashboard">Try reloading.</EmptyState>
   if (!data) return <Spinner label="Loading dashboard…" />
@@ -21,6 +42,7 @@ export function DashboardPage() {
   const counts = data.counts
   const byStatus = counts.submissions_by_status ?? {}
   const submissionsTotal = Object.values(byStatus).reduce((a, b) => a + b, 0)
+  const funnelMax = Math.max(...FUNNEL_STAGES.map((s) => byStatus[s] ?? 0), 1)
   const tasksDone = rows.reduce((a, r) => a + r.done_count, 0)
   const tasksTotal = counts.speakers * counts.tasks
 
@@ -53,6 +75,57 @@ export function DashboardPage() {
         ))}
       </div>
 
+      <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', marginBottom: 18 }}>
+        <Card title="Submission pipeline">
+          <div className="stack" style={{ gap: 10 }}>
+            {FUNNEL_STAGES.map((st) => {
+              const n = byStatus[st] ?? 0
+              return (
+                <div key={st} className="row" style={{ gap: 10 }}>
+                  <span className="small muted" style={{ width: 86, flex: 'none' }}>{STATUS_LABELS[st]}</span>
+                  <div className="grow" style={{ background: 'var(--surface-2)', borderRadius: 6, height: 22, overflow: 'hidden' }}>
+                    <div style={{
+                      width: `${(n / funnelMax) * 100}%`, height: '100%',
+                      background: st === 'accepted' ? 'var(--accent)' : 'var(--accent-soft)',
+                      borderRadius: 6, minWidth: n > 0 ? 6 : 0, transition: 'width 300ms',
+                    }} />
+                  </div>
+                  <strong style={{ width: 32, textAlign: 'right', flex: 'none' }}>{n}</strong>
+                </div>
+              )
+            })}
+            {(byStatus.waitlisted || byStatus.rejected || byStatus.withdrawn) ? (
+              <p className="faint small">
+                {byStatus.waitlisted ? `${byStatus.waitlisted} waitlisted · ` : ''}
+                {byStatus.rejected ? `${byStatus.rejected} rejected · ` : ''}
+                {byStatus.withdrawn ? `${byStatus.withdrawn} withdrawn` : ''}
+              </p>
+            ) : null}
+          </div>
+        </Card>
+
+        <Card title="Accepted talks by track">
+          {byTrack.length === 0 ? (
+            <p className="muted small">Accept submissions to see track balance.</p>
+          ) : (
+            <div className="stack" style={{ gap: 8 }}>
+              {byTrack.map(([name, n]) => {
+                const color = tracks.find((t) => t.name === name)?.color
+                return (
+                  <div key={name} className="spread small">
+                    <span className="row" style={{ gap: 7 }}>
+                      <span className="dot" style={{ background: color ?? 'var(--faint)' }} />
+                      {name}
+                    </span>
+                    <strong>{n}</strong>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </Card>
+      </div>
+
       <Card title="Speaker onboarding" pad={false}
         actions={<span className="muted small">{tasksDone}/{tasksTotal} tasks complete</span>}>
         {rows.length === 0 ? (
@@ -77,6 +150,7 @@ export function DashboardPage() {
                     </th>
                   ))}
                   <th>Status</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -115,6 +189,14 @@ export function DashboardPage() {
                         : row.complete
                           ? <Badge tone="badge-ok">ready</Badge>
                           : <Badge>{row.done_count}/{tasks.length}</Badge>}
+                    </td>
+                    <td>
+                      {!row.complete && (
+                        <Button size="sm" title="Send a reminder from Comms"
+                          onClick={() => nav(`/org/comms?speakers=${row.speaker.id}`)}>
+                          Remind
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ))}
