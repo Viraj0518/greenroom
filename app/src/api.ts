@@ -152,8 +152,14 @@ export const api = {
   submitForm: (
     formId: string,
     b: { speaker: { email: string; name: string; bio?: string }; answers: Record<string, unknown> },
-  ) => req<{ submission_id: string; speaker_id: string; magic_token?: string }>(
-    'POST', `/public/forms/${formId}/submit`, b),
+  ) => req<{
+    submission_id: string
+    speaker_id: string
+    magic_token?: string
+    /** pinned decision #8: always present; the success screen's portal link */
+    portal_url: string
+    email_delivery: 'logged' | 'real'
+  }>('POST', `/public/forms/${formId}/submit`, b),
 
   // ----- submissions -----
   listSubmissions: (eventId: string, q: { status?: string; track?: string; q?: string } = {}) => {

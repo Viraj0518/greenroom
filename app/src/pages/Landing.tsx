@@ -1,10 +1,12 @@
 import { Link } from 'react-router-dom'
 import '../styles/landing.css'
 
-// Demo organizer credentials shown to judges — must match the seeded admin in
-// db/ seed data. Coordinate changes with the data lane via the coordinator.
-const DEMO_EMAIL = 'demo@greenroom.dev'
-const DEMO_PASSWORD = 'greenroom-demo'
+// Demo organizer credentials + CFP form id shown to judges — MUST match db/
+// seed (QA verifies these against the live deployment; drift here is a
+// judge-facing dead-end). Coordinate changes with the data lane.
+const DEMO_EMAIL = 'admin@example.com'
+const DEMO_PASSWORD = 'demo-greenroom-2026'
+const CFP_FORM_ID = '33333333-3333-4333-8333-333333333301'
 
 // /embed/* and /f/* open real product surfaces; embeds are server-rendered (pin #6)
 const FEATURES = [

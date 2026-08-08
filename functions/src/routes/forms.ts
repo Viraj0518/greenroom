@@ -223,7 +223,7 @@ forms.post('/public/forms/:formId/submit', async (c) => {
     form.event_id
   )
   const portal = portalUrl(c.env, c.req.url, speaker)
-  await sendSpeakerEmail({
+  const emailResult = await sendSpeakerEmail({
     env: c.env,
     eventId: form.event_id,
     speaker,
@@ -251,7 +251,18 @@ forms.post('/public/forms/:formId/submit', async (c) => {
     },
   })
 
-  return c.json({ ok: true, submission_id: submissionId }, 201)
+  // Pin #8: the submitter gets their own magic-link URL back (only ever returned to its
+  // owner, in this response) plus whether the confirmation email really went out —
+  // keeps the flow self-contained when no email provider is configured.
+  return c.json(
+    {
+      ok: true,
+      submission_id: submissionId,
+      portal_url: portal,
+      email_delivery: emailResult.provider === 'console' ? 'logged' : 'real',
+    },
+    201
+  )
 })
 
 // --- organizer submissions ---

@@ -115,15 +115,33 @@ export function PortalPage() {
               </ul>
             )}
           {me.submissions.some((s) => s.status === 'accepted') && (
-            <p className="small muted" style={{ marginTop: 12 }}>
-              📆 <a href={icsUrl(me.speaker.id, localStorage.getItem(TOKEN_KEY) ?? '')}>
-                Add your talks to your calendar (.ics)
-              </a>
-            </p>
+            <CalendarLinks speakerId={me.speaker.id} eventName={me.event.name} />
           )}
         </Card>
       </div>
     </Shell>
+  )
+}
+
+/**
+ * Calendar integrations (competition req. 3): .ics download plus Google/Outlook
+ * subscribe links wrapping the same feed URL — plain URL templates, zero deps.
+ * Subscribed feeds auto-update when the schedule changes.
+ */
+function CalendarLinks({ speakerId, eventName }: { speakerId: string; eventName: string }) {
+  const token = localStorage.getItem(TOKEN_KEY) ?? ''
+  const path = icsUrl(speakerId, token)
+  const abs = `${window.location.origin}${path}`
+  const webcal = abs.replace(/^https?:/, 'webcal:')
+  const google = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`
+  const outlook = `https://outlook.live.com/calendar/0/addfromweb?url=${encodeURIComponent(webcal)}&name=${encodeURIComponent(`${eventName} — my talks`)}`
+  return (
+    <div className="row-wrap small" style={{ marginTop: 12 }}>
+      <span className="muted">📆 Your talks, on your calendar:</span>
+      <a className="btn btn-sm" href={path} download>.ics file</a>
+      <a className="btn btn-sm" href={google} target="_blank" rel="noreferrer">Google Calendar</a>
+      <a className="btn btn-sm" href={outlook} target="_blank" rel="noreferrer">Outlook</a>
+    </div>
   )
 }
 

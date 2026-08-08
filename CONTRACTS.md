@@ -225,6 +225,14 @@ Storage-dependent routes return 501 `code: "storage_not_configured"` while R2 is
      this file) + server-rendered `GET /api/docs` page (pin #6 style: self-contained HTML, no
      docs-bundle dependency) with auth modes and curl examples.
 
+8. **CFP confirmation must never dead-end (coordinator, 2026-08-08).** The public submit 201
+   response includes `portal_url` (the submitting speaker's own magic-link URL — safe: it goes
+   only to the person who owns it) and `email_delivery`: `"real"` (provider actually delivers,
+   e.g. resend) or `"logged"` (console provider). The CFP confirmation screen always shows a
+   "Go to your speaker portal" link from `portal_url`; when `email_delivery` is `"logged"` it
+   says the link is their access key, when `"real"` it adds "we've also emailed it to you".
+   Judges/self-hosters get a working flow with zero email configuration.
+
 ## Bindings (wrangler.toml names — maintainer owns file, these names are fixed)
 - D1: `DB` (database `greenroom-db`)
 - R2: `FILES` (bucket `greenroom-files`) — commented out until billing unblocks; see pin #7

@@ -7,6 +7,7 @@ import { buildCalendar, type IcsEvent } from '../lib/ics'
 import { portalUrl, icsUrl } from '../email/send'
 import { getEmailProvider } from '../email/provider'
 import { renderMarkdown, renderVars } from '../lib/markdown'
+import { googleCalendarLink, outlookCalendarLink } from '../lib/calendar-links'
 
 const comms = new Hono<AppEnv>()
 
@@ -147,8 +148,10 @@ comms.post('/events/:eventId/send', async (c) => {
     }
   }
 
+  // Fetched regardless of include_ics: the primary slot also feeds the
+  // {{gcal_link}}/{{outlook_link}} template variables (requirement 3: Gmail/Outlook/iCal).
   const icsRowsBySpeaker = new Map<string, IcsRow[]>()
-  if (body.include_ics && speakerIds.length) {
+  if (speakerIds.length) {
     const icsRows = await all<IcsRow & { speaker_id: string }>(
       c.env.DB,
       `SELECT s.speaker_id, sl.id, sl.starts_at, sl.ends_at, sl.title AS slot_title, s.title AS talk_title,
@@ -175,6 +178,18 @@ comms.post('/events/:eventId/send', async (c) => {
 
   for (const speaker of speakers) {
     const talks = talksBySpeaker.get(speaker.id) ?? []
+    // Primary slot (earliest scheduled accepted talk) drives the add-to-calendar links.
+    const primary = icsRowsBySpeaker.get(speaker.id)?.[0]
+    const linkEvent = primary
+      ? {
+          title: primary.slot_title ?? primary.talk_title,
+          starts_at: primary.starts_at,
+          ends_at: primary.ends_at,
+          location: primary.room_name ?? undefined,
+          description: primary.abstract ?? undefined,
+        }
+      : null
+    const icsLink = icsUrl(c.env, c.req.url, speaker)
     const subject = renderVars(template.subject, { name: speaker.name, event: event.name })
     const bodyMd = renderVars(template.body_md, {
       name: speaker.name,
@@ -183,7 +198,10 @@ comms.post('/events/:eventId/send', async (c) => {
       title: talks[0],
       titles: talks.join(', '),
       portal_url: portalUrl(c.env, c.req.url, speaker),
-      ics_url: icsUrl(c.env, c.req.url, speaker),
+      ics_url: icsLink,
+      ics_link: icsLink,
+      gcal_link: linkEvent ? googleCalendarLink(linkEvent) : '',
+      outlook_link: linkEvent ? outlookCalendarLink(linkEvent) : '',
     })
     const attachments = body.include_ics
       ? [

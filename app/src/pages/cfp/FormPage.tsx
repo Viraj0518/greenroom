@@ -119,7 +119,12 @@ export function FormPage() {
     setBusy(true)
     try {
       const res = await api.submitForm(form.id, { speaker, answers: payload })
-      nav(`/f/${form.id}/success`, { state: { magic_token: res.magic_token, event: form.event.name, title: payload.title } })
+      nav(`/f/${form.id}/success`, {
+        state: {
+          portal_url: res.portal_url, email_delivery: res.email_delivery,
+          event: form.event.name, title: payload.title,
+        },
+      })
     } catch (err) {
       setErrors({ _form: err instanceof ApiError ? err.message : 'Submission failed — please try again.' })
     } finally {
@@ -194,25 +199,32 @@ export function FormPage() {
   )
 }
 
+// Pinned decision #8: the success screen ALWAYS presents the portal link
+// prominently; copy varies on how the confirmation email was delivered.
 export function FormSuccessPage() {
-  const { state } = useLocation() as { state?: { magic_token?: string; event?: string; title?: unknown } }
-  const portalUrl = state?.magic_token ? `/portal?token=${encodeURIComponent(state.magic_token)}` : '/portal'
+  const { state } = useLocation() as {
+    state?: { portal_url?: string; email_delivery?: 'logged' | 'real'; event?: string; title?: unknown }
+  }
+  const portalUrl = state?.portal_url ?? '/portal'
+  const emailed = state?.email_delivery === 'real'
   return (
     <PublicShell>
       <div className="empty" style={{ paddingTop: 60 }}>
         <div style={{ fontSize: '2.6rem' }} aria-hidden>🎉</div>
         <h1>Proposal received!</h1>
-        <p className="muted" style={{ maxWidth: 420 }}>
+        <p className="muted" style={{ maxWidth: 440 }}>
           {typeof state?.title === 'string' && state.title
             ? <>Thanks for submitting <strong>“{state.title}”</strong>{state?.event ? <> to {state.event}</> : null}.</>
-            : 'Thanks for your submission.'}{' '}
-          A confirmation email with your personal portal link is on its way.
+            : 'Thanks for your submission.'}
         </p>
-        <Link to={portalUrl} className="btn btn-primary" style={{ marginTop: 12 }}>
-          Open your speaker portal →
+        <Link to={portalUrl} className="btn btn-primary" style={{ marginTop: 12, padding: '11px 22px' }}>
+          Go to your speaker portal →
         </Link>
-        <p className="faint small" style={{ maxWidth: 380 }}>
-          The portal is where you manage your bio, headshot, slides, and onboarding tasks.
+        <p className="small muted" style={{ maxWidth: 420 }}>
+          {emailed
+            ? <>We’ve also emailed this link to you — either one works.</>
+            : <><strong>Save this link</strong> — it’s your portal access. You’ll use it to manage your
+              bio, headshot, slides, and onboarding tasks.</>}
         </p>
       </div>
     </PublicShell>

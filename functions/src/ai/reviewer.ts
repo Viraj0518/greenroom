@@ -103,14 +103,24 @@ export function workersAiReviewer(ai: WorkersAi): AIReviewer {
     name: 'workers-ai',
     async review(input) {
       const criteria = rubricCriteria(input.rubric)
-      const result = (await ai.run('@cf/meta/llama-3.1-8b-instruct', {
+      // llama-3.1-8b-instruct (base) was deprecated 2026-05-30; 3.3-70b-fp8-fast is the
+      // current catalog pick with reliable JSON-following at demo-friendly latency.
+      const result = (await ai.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
         messages: [{ role: 'user', content: buildPrompt(input, criteria) }],
         max_tokens: 800,
-      })) as { response?: string }
-      if (typeof result?.response !== 'string') {
-        throw new Error('Workers AI returned no text response')
+      })) as Record<string, unknown>
+      // Model families differ: classic binding shape {response}, OpenAI-compat
+      // {choices:[{message:{content}}]}, some wrap in {result:{response}}.
+      const text =
+        (typeof result?.response === 'string' && result.response) ||
+        ((result?.choices as Array<{ message?: { content?: string } }> | undefined)?.[0]?.message?.content ?? '') ||
+        (typeof (result?.result as { response?: string } | undefined)?.response === 'string'
+          ? (result.result as { response: string }).response
+          : '')
+      if (!text) {
+        throw new Error(`Workers AI returned no text (shape: ${JSON.stringify(result).slice(0, 200)})`)
       }
-      return parseReview(result.response, criteria)
+      return parseReview(text, criteria)
     },
   }
 }

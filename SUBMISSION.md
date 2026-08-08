@@ -17,10 +17,10 @@ Submit ONLY after QA's explicit GO on the candidate sha (M5 gate).
 
 | Role | How |
 |---|---|
-| Organizer (admin) | https://greenroom-dev.pages.dev/org/login — `admin@example.com` / `demo-greenroom-2026` |
+| Organizer (admin) | https://greenroom-dev.pages.dev/org/login — `demo@greenroom.dev` / `greenroom-demo` |
 | Reviewer | `jordan.kim@example.com` / `demo-greenroom-2026` |
 | Speaker portal | https://greenroom-dev.pages.dev/portal?token=mtok_s01_9f3a7c1e2b4d |
-| Public CFP form | https://greenroom-dev.pages.dev/f/33333333-3333-4333-8333-333333333301 |
+| Public CFP form | https://greenroom-dev.pages.dev/f/form_cfp |
 | Embeds (iframe-ready) | /embed/speakers/devconf-2026 · /embed/schedule/devconf-2026 |
 
 ## Feature checklist (the brief's 9 + bonus)

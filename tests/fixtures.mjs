@@ -10,7 +10,7 @@ export const SEED = {
   published: true,
   eventSlug: 'devconf-2026',
   eventId: '22222222-2222-4222-8222-222222222201',
-  formId: '33333333-3333-4333-8333-333333333301', // open CFP form
+  formId: 'form_cfp', // open CFP form (friendly TEXT PK per coordinator decision; seed-only)
   // Priya Raman — accepted keynote sub 55555555-5555-4555-8555-555555555501,
   // scheduled in slot aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa01 (Main Hall,
   // 2026-10-06T16:00:00Z), 4/4 onboarding tasks done, headshot + slides assets.

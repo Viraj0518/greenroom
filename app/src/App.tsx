@@ -1,8 +1,43 @@
-import { Suspense, lazy, useSyncExternalStore, type ComponentType } from 'react'
-import { Route, Routes, Navigate } from 'react-router-dom'
+import { Component, Suspense, lazy, useSyncExternalStore, type ComponentType, type ReactNode } from 'react'
+import { Route, Routes, Navigate, Link } from 'react-router-dom'
 import { Landing } from './pages/Landing'
 import { Spinner } from './components/ui'
 import { onMocksActivated, usingMocks } from './api'
+
+/**
+ * Shell-level error boundary: a crash in any page renders a readable error
+ * card instead of a black screen (added after a judge-blocking dashboard
+ * crash on staging, 2026-08-08).
+ */
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null }
+  static getDerivedStateFromError(error: Error) { return { error } }
+  componentDidCatch(error: Error) { console.error('[greenroom] page crashed:', error) }
+  render() {
+    if (!this.state.error) return this.props.children
+    return (
+      <main style={{ maxWidth: 520, margin: '0 auto', padding: '14vh 20px', textAlign: 'center' }}>
+        <div style={{ fontSize: '2.2rem', marginBottom: 10 }} aria-hidden>🫠</div>
+        <h1>Something broke on this page</h1>
+        <p className="muted" style={{ margin: '10px 0 18px' }}>
+          The rest of the app is fine — this screen hit an unexpected error.
+        </p>
+        <p className="mono small" style={{
+          background: 'var(--surface-2)', borderRadius: 8, padding: '8px 12px',
+          marginBottom: 18, overflowWrap: 'break-word',
+        }}>
+          {String(this.state.error)}
+        </p>
+        <span className="row" style={{ justifyContent: 'center' }}>
+          <button className="btn btn-primary" onClick={() => { this.setState({ error: null }); window.location.reload() }}>
+            Reload
+          </button>
+          <Link className="btn" to="/" onClick={() => this.setState({ error: null })}>Go home</Link>
+        </span>
+      </main>
+    )
+  }
+}
 
 /** Persistent, non-dismissable indicator that the UI is running on demo data. */
 function DemoChip() {
@@ -42,9 +77,10 @@ const SettingsPage = lazy(() => import('./pages/org/SettingsPage').then(load('Se
 
 export function App() {
   return (
-    <Suspense fallback={<Spinner label="Loading…" />}>
-      <DemoChip />
-      <Routes>
+    <ErrorBoundary>
+      <Suspense fallback={<Spinner label="Loading…" />}>
+        <DemoChip />
+        <Routes>
         <Route path="/" element={<Landing />} />
 
         {/* public CFP */}

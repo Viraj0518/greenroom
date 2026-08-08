@@ -14,19 +14,19 @@ row counter (…01, …02, …).
 | Event id | `22222222-2222-4222-8222-222222222201` |
 | Slug | `devconf-2026` |
 | Dates | 2026-10-06 → 2026-10-08, `America/Los_Angeles` (UTC-7; 9:00 local = 16:00Z) |
-| CFP form id (open) | `33333333-3333-4333-8333-333333333301` |
+| CFP form id (open) | `form_cfp` (friendly TEXT PK — seed-only; API-created rows use crypto.randomUUID()) |
 
 ## Users (organizers)
 
-All three log in with demo password **`demo-greenroom-2026`** — hashes are in backend's
-format: `pbkdf2$<iterations>$<salt b64>$<key b64>` (PBKDF2-SHA256, 100k iterations,
-WebCrypto), per-user salts.
+Hashes are in backend's format: `pbkdf2$<iterations>$<salt b64>$<key b64>`
+(PBKDF2-SHA256, 100k iterations, WebCrypto), per-user salts.
 
-| id | email | role |
-|---|---|---|
-| `11111111-1111-4111-8111-111111111101` | admin@example.com | admin |
-| `11111111-1111-4111-8111-111111111102` | jordan.kim@example.com | reviewer |
-| `11111111-1111-4111-8111-111111111103` | sam.osei@example.com | reviewer |
+| id | email | role | password |
+|---|---|---|---|
+| `11111111-1111-4111-8111-111111111104` | **demo@greenroom.dev** (the login shown in UI copy) | admin | `greenroom-demo` |
+| `11111111-1111-4111-8111-111111111101` | admin@example.com | admin | `demo-greenroom-2026` |
+| `11111111-1111-4111-8111-111111111102` | jordan.kim@example.com | reviewer | `demo-greenroom-2026` |
+| `11111111-1111-4111-8111-111111111103` | sam.osei@example.com | reviewer | `demo-greenroom-2026` |
 
 ## Speakers (44444444-…-44444444440NN)
 
@@ -37,7 +37,7 @@ WebCrypto), per-user salts.
 | 03 | …4403 | Amara Diallo | amara.diallo@example.com | `mtok_s03_b2d64e0c7a15` | accepted (scheduled) + waitlisted |
 | 04 | …4404 | Diego Fuentes | diego.fuentes@example.com | `mtok_s04_e7a90b3c5d21` | accepted workshop (scheduled) |
 | 05 | …4405 | Mei-Ling Chen | meiling.chen@example.com | `mtok_s05_1f4c8d2e6b93` | accepted (scheduled) + rejected |
-| 06 | …4406 | Tomás Aguilar | tomas.aguilar@example.com | `mtok_s06_8a2b5f7c0d46` | accepted (scheduled) + withdrawn; 0/4 onboarding done |
+| 06 | …4406 | Tomás Aguilar | tomas.aguilar@example.com | `mtok_s06_8a2b5f7c0d46` | accepted (scheduled) + withdrawn; 1/4 onboarding (headshot only, post-reminder) |
 | 07 | …4407 | Nadia Petrova | nadia.petrova@example.com | `mtok_s07_3d6e9a1b4c78` | accepted, **NOT scheduled** (drag-drop demo) |
 | 08 | …4408 | Kwame Mensah | kwame.mensah@example.com | `mtok_s08_c5f01d8e2a67` | accepted, **NOT scheduled** (drag-drop demo) |
 | 09 | …4409 | Sofia Lindqvist | sofia.lindqvist@example.com | `mtok_s09_7b3a6c9d0e52` | in_review |
@@ -85,10 +85,20 @@ drag them in during the demo; Terrace is an empty room for drop targets.
   backend's auto-complete conventions: portal profile save marks `profile`; an asset upload
   marks the task key equal to its kind (`headshot`/`slides`); `av_form` is completed manually
   via `POST /api/portal/tasks/av_form/done`. Completion is mixed across speakers 01–08
-  (s01 = 4/4 … s06 = 0/4 and overdue → dashboard has real signal).
+  (19 done / 13 open; s01 = 4/4, s06 = 1/4 with profile + AV overdue → dashboard has real
+  signal). All 8 accepted speakers have `headshot` done + a matching asset row —
+  the speaker-gallery embed renders 8 real images.
 - Resources: `speaker-guide` (public) · `venue-av` (public, **has embed_html** iframe) ·
   `pc-handbook` (internal, `is_public=0` — must NOT appear on public routes).
 - Integrations: one `accelevents` + one `airtable` row, both `not_configured` → graceful no-op.
+
+## Storage objects (pin #7: Supabase Storage, bucket `greenroom-files`)
+
+Asset rows point at deterministic object keys: `headshots/<speaker-uuid>.jpg` for all 8
+accepted speakers, plus `slides/55555555-5555-4555-8555-555555555501.pdf`. The bytes are
+demo-safe abstract avatars uploaded by the maintainer at exactly these keys — if you
+self-host, upload any 9 files at those keys (or clear the `assets` rows and
+`speakers.headshot_key` and the UI falls back to initials).
 
 ## Regenerating
 

@@ -326,35 +326,41 @@ function leaderboard(roundId: string) {
   return { round_id: roundId, rows }
 }
 
+// Mirrors functions/src/routes/dashboard.ts response exactly.
 function dashboard() {
   const nowIso = now()
-  const acceptedSpeakerIds = new Set(submissions.filter((s) => s.status === 'accepted').map((s) => s.speaker_id))
-  const roster = speakers.filter((s) => acceptedSpeakerIds.has(s.id))
-  let tasksDone = 0, overdueCount = 0
-  const matrix = roster.map((sp) => {
-    const done = speakerTasks.get(sp.id) ?? new Map()
-    const overdue: string[] = []
-    const tasks: Record<string, { done: number; done_at: string | null }> = {}
-    for (const t of onboardingTasks) {
+  const taskDefs = onboardingTasks.map((t) => ({ key: t.key, label: t.label, due_at: t.due_at, required: t.required }))
+  const rows = speakers.map((sp) => {
+    const done = speakerTasks.get(sp.id) ?? new Map<string, string>()
+    const cells: Record<string, { done: boolean; done_at: string | null; overdue: boolean }> = {}
+    let doneCount = 0, overdueCount = 0
+    for (const t of taskDefs) {
       const d = done.has(t.key)
-      tasks[t.key] = { done: d ? 1 : 0, done_at: done.get(t.key) ?? null }
-      if (d) tasksDone++
-      else if (t.due_at && t.due_at < nowIso && t.required) { overdue.push(t.key); overdueCount++ }
+      const overdue = !d && !!t.due_at && t.due_at < nowIso
+      if (d) doneCount++
+      if (overdue) overdueCount++
+      cells[t.key] = { done: d, done_at: done.get(t.key) ?? null, overdue }
     }
-    return { speaker: { id: sp.id, name: sp.name, email: sp.email }, tasks, overdue }
+    return {
+      speaker: { id: sp.id, name: sp.name, email: sp.email, company: sp.company, headshot_key: sp.headshot_key },
+      tasks: cells,
+      done_count: doneCount,
+      overdue_count: overdueCount,
+      complete: taskDefs.length > 0 && doneCount === taskDefs.length,
+    }
   })
+  const byStatus: Record<string, number> = {}
+  for (const s of submissions) byStatus[s.status] = (byStatus[s.status] ?? 0) + 1
   return {
+    tasks: taskDefs,
+    speakers: rows,
     counts: {
-      speakers: roster.length,
-      submissions: submissions.length,
-      accepted: submissions.filter((s) => s.status === 'accepted').length,
-      scheduled: slots.filter((s) => s.submission_id).length,
-      tasks_done: tasksDone,
-      tasks_total: roster.length * onboardingTasks.length,
-      overdue: overdueCount,
+      speakers: speakers.length,
+      tasks: taskDefs.length,
+      complete_speakers: rows.filter((r) => r.complete).length,
+      overdue: rows.reduce((n, r) => n + r.overdue_count, 0),
+      submissions_by_status: byStatus,
     },
-    task_defs: onboardingTasks,
-    matrix,
   }
 }
 
@@ -444,7 +450,11 @@ const routes: Array<[string, RegExp, Handler]> = [
     magicSpeaker.set(token, sp.id)
     emails.push({ id: id('em'), event_id: EV, speaker_id: sp.id, template_key: 'confirmation',
       subject: `We got it: ${sub.title}`, status: 'sent', provider: 'console', created_at: now() })
-    return { submission_id: sub.id, speaker_id: sp.id, magic_token: token }
+    // pinned decision #8: portal_url + email_delivery always returned
+    return {
+      submission_id: sub.id, speaker_id: sp.id, magic_token: token,
+      portal_url: `/portal?token=${encodeURIComponent(token)}`, email_delivery: 'logged',
+    }
   }],
 
   // submissions

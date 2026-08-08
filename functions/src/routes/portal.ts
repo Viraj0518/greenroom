@@ -5,6 +5,8 @@ import { readBody, optionalString, badRequest, notFound, notConfigured } from '.
 import { all, one, run, uuid, now, parseJson } from '../lib/db'
 import { requireSpeaker } from '../lib/auth'
 import { getStorage } from '../storage/provider'
+import { googleCalendarLink, outlookCalendarLink } from '../lib/calendar-links'
+import { icsUrl } from '../email/send'
 
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 
@@ -14,10 +16,20 @@ portal.use('/portal/*', requireSpeaker)
 
 portal.get('/portal/me', async (c) => {
   const speaker = c.get('speaker')!
-  const [submissions, tasks, assets, event] = await Promise.all([
-    all<Record<string, unknown>>(
+  const [submissions, slots, tasks, assets, event] = await Promise.all([
+    all<Record<string, unknown> & { id: string; title: string; abstract: string | null; status: string }>(
       c.env.DB,
       'SELECT id, title, abstract, category, track, status, created_at FROM submissions WHERE speaker_id = ? ORDER BY created_at DESC',
+      speaker.id
+    ),
+    all<{ submission_id: string; starts_at: string; ends_at: string; slot_title: string | null; room_name: string | null }>(
+      c.env.DB,
+      `SELECT sl.submission_id, sl.starts_at, sl.ends_at, sl.title AS slot_title, r.name AS room_name
+       FROM schedule_slots sl
+       JOIN submissions s ON s.id = sl.submission_id
+       LEFT JOIN rooms r ON r.id = sl.room_id
+       WHERE s.speaker_id = ? AND s.status = 'accepted'
+       ORDER BY sl.starts_at`,
       speaker.id
     ),
     all<Record<string, unknown>>(
@@ -41,12 +53,37 @@ portal.get('/portal/me', async (c) => {
       speaker.event_id
     ),
   ])
+  // "Add to calendar" support (requirement 3): earliest slot per accepted submission
+  // drives per-submission Gmail/Outlook deeplinks; ics_url covers iCal for everything.
+  const slotBySubmission = new Map<string, (typeof slots)[number]>()
+  for (const s of slots) {
+    if (!slotBySubmission.has(s.submission_id)) slotBySubmission.set(s.submission_id, s)
+  }
+  const withCalendar = submissions.map((sub) => {
+    const slot = slotBySubmission.get(sub.id)
+    if (!slot) return { ...sub, slot: null, gcal_link: null, outlook_link: null }
+    const linkEvent = {
+      title: slot.slot_title ?? sub.title,
+      starts_at: slot.starts_at,
+      ends_at: slot.ends_at,
+      location: slot.room_name ?? undefined,
+      description: sub.abstract ?? undefined,
+    }
+    return {
+      ...sub,
+      slot: { starts_at: slot.starts_at, ends_at: slot.ends_at, room: slot.room_name },
+      gcal_link: googleCalendarLink(linkEvent),
+      outlook_link: outlookCalendarLink(linkEvent),
+    }
+  })
+
   return c.json({
     speaker: publicSpeaker(speaker),
     event,
-    submissions,
+    submissions: withCalendar,
     tasks,
     assets,
+    ics_url: icsUrl(c.env, c.req.url, speaker),
   })
 })
 

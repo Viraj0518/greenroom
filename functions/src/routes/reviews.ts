@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import type { AppEnv } from '../types'
-import { readBody, readJson, requireString, optionalString, optionalFlag, badRequest, notFound, notConfigured } from '../lib/http'
+import { ApiError, readBody, requireString, optionalString, optionalFlag, badRequest, notFound, notConfigured } from '../lib/http'
 import { all, one, run, uuid, now, parseJson } from '../lib/db'
 import { requireOrganizer } from '../lib/auth'
 import { getAIReviewer } from '../ai/reviewer'
@@ -161,13 +161,20 @@ reviews.post('/rounds/:roundId/submissions/:sid/ai-review', async (c) => {
     throw notConfigured('AI review is not configured: set ANTHROPIC_API_KEY to enable it', 'ai_not_configured')
   }
   const { round, submission } = await loadRoundSubmission(c.env.DB, c.req.param('roundId'), c.req.param('sid'))
-  const result = await reviewer.review({
-    title: submission.title,
-    abstract: submission.abstract,
-    category: submission.category,
-    answers: parseJson(submission.answers_json, {}),
-    rubric: parseJson(round.rubric_json, null),
-  })
+  let result
+  try {
+    result = await reviewer.review({
+      title: submission.title,
+      abstract: submission.abstract,
+      category: submission.category,
+      answers: parseJson(submission.answers_json, {}),
+      rubric: parseJson(round.rubric_json, null),
+    })
+  } catch (err) {
+    // A misbehaving upstream (bad key, model error, malformed output) must surface as a
+    // clean 502, never a 500 — config absence is already the 501 above.
+    throw new ApiError(502, 'ai_error', `AI reviewer (${reviewer.name}) failed: ${String(err).slice(0, 300)}`)
+  }
   await upsertReview(c.env.DB, round.id, submission.id, 'ai', 1, JSON.stringify(result.scores), result.comment)
   if (submission.status === 'submitted') {
     await run(c.env.DB, "UPDATE submissions SET status = 'in_review' WHERE id = ?", submission.id)

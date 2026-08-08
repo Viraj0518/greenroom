@@ -22,8 +22,18 @@ export function initials(name: string): string {
 
 export function fmtDate(iso: string | null | undefined, opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }): string {
   if (!iso) return '—'
+  // Date-only strings ("2026-10-06") parse as UTC midnight and would render a
+  // day early west of Greenwich — parse them as local calendar dates instead.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    const [y, m, d] = iso.split('-').map(Number)
+    return new Date(y, m - 1, d).toLocaleDateString(undefined, opts)
+  }
   const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString(undefined, opts)
+  if (Number.isNaN(d.getTime())) return '—'
+  // UTC-midnight timestamps are semantically dates (due dates) — format in UTC
+  // so they don't slip a day in western timezones.
+  if (/T00:00:00(\.\d+)?Z$/.test(iso)) return d.toLocaleDateString(undefined, { ...opts, timeZone: 'UTC' })
+  return d.toLocaleDateString(undefined, opts)
 }
 
 export function fmtTime(iso: string, timeZone?: string): string {

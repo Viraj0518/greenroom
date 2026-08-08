@@ -238,24 +238,29 @@ export interface PortalMe {
   assets: Asset[]
 }
 
-export interface DashboardMatrixRow {
-  speaker: { id: string; name: string; email: string }
-  tasks: Record<string, { done: number; done_at: string | null }>
-  overdue: string[]
+// Shape mirrors functions/src/routes/dashboard.ts exactly (verified 2026-08-08
+// after a staging crash from drift — do not re-guess this).
+export interface DashboardTaskDef { key: string; label: string; due_at: string | null; required: number }
+export interface DashboardCell { done: boolean; done_at: string | null; overdue: boolean }
+
+export interface DashboardSpeakerRow {
+  speaker: { id: string; name: string; email: string; company: string | null; headshot_key: string | null }
+  tasks: Record<string, DashboardCell>
+  done_count: number
+  overdue_count: number
+  complete: boolean
 }
 
 export interface DashboardData {
+  tasks: DashboardTaskDef[]
+  speakers: DashboardSpeakerRow[]
   counts: {
     speakers: number
-    submissions: number
-    accepted: number
-    scheduled: number
-    tasks_done: number
-    tasks_total: number
+    tasks: number
+    complete_speakers: number
     overdue: number
+    submissions_by_status: Record<string, number>
   }
-  task_defs: OnboardingTask[]
-  matrix: DashboardMatrixRow[]
 }
 
 // ----- resources -----

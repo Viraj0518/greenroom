@@ -2,7 +2,7 @@
 
 **Open-source speaker & content management for conferences** — a self-hostable alternative to Sessionboard. Run your call-for-papers, speaker onboarding, session review, and agenda building on your own Cloudflare account.
 
-**Live demo:** https://greenroom-dev.pages.dev · [Organizer login](https://greenroom-dev.pages.dev/org/login) `admin@example.com` / `demo-greenroom-2026` · [Speaker portal](https://greenroom-dev.pages.dev/portal?token=mtok_s01_9f3a7c1e2b4d) · [Public CFP form](https://greenroom-dev.pages.dev/f/33333333-3333-4333-8333-333333333301) · [Speaker embed](https://greenroom-dev.pages.dev/embed/speakers/devconf-2026) · [Schedule embed](https://greenroom-dev.pages.dev/embed/schedule/devconf-2026)
+**Live demo:** https://greenroom-dev.pages.dev · [Organizer login](https://greenroom-dev.pages.dev/org/login) `demo@greenroom.dev` / `greenroom-demo` · [Speaker portal](https://greenroom-dev.pages.dev/portal?token=mtok_s01_9f3a7c1e2b4d) · [Public CFP form](https://greenroom-dev.pages.dev/f/form_cfp) · [Speaker embed](https://greenroom-dev.pages.dev/embed/speakers/devconf-2026) · [Schedule embed](https://greenroom-dev.pages.dev/embed/schedule/devconf-2026)
 
 ## The 9 requirements, mapped
 
@@ -116,9 +116,9 @@ Set secrets with `pnpm exec wrangler pages secret put <NAME> --project-name gree
 
 ## Demo walkthrough
 
-1. **Organizer** — [log in](https://greenroom-dev.pages.dev/org/login) (`admin@example.com` / `demo-greenroom-2026`): dashboard with onboarding matrix, submission triage, review rounds + leaderboard, drag-and-drop schedule (try dragging a talk onto an occupied slot — conflicts highlight), comms templates + send log, resources wiki, form builder.
+1. **Organizer** — [log in](https://greenroom-dev.pages.dev/org/login) (`demo@greenroom.dev` / `greenroom-demo`): dashboard with onboarding matrix, submission triage, review rounds + leaderboard, drag-and-drop schedule (try dragging a talk onto an occupied slot — conflicts highlight), comms templates + send log, resources wiki, form builder.
 2. **Speaker** — open the [portal](https://greenroom-dev.pages.dev/portal?token=mtok_s01_9f3a7c1e2b4d) as the keynote speaker: edit profile, upload files, watch tasks complete.
-3. **Submitter** — file a talk through the [public CFP form](https://greenroom-dev.pages.dev/f/33333333-3333-4333-8333-333333333301) (conditional fields react as you pick a category).
+3. **Submitter** — file a talk through the [public CFP form](https://greenroom-dev.pages.dev/f/form_cfp) (conditional fields react as you pick a category).
 4. **Any website** — the [speakers](https://greenroom-dev.pages.dev/embed/speakers/devconf-2026) and [schedule](https://greenroom-dev.pages.dev/embed/schedule/devconf-2026) embeds are script-free pages made for iframing; view-source to verify.
 
 ## License

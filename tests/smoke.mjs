@@ -183,6 +183,20 @@ await check('latency: public endpoints median < 500ms (3 samples each)', async (
   assert(slow.length === 0, `over 500ms budget: ${slow.join('; ')}`);
 });
 
+await check('embed images all resolve (200 + image/*) — no broken gallery', async () => {
+  const broken = [];
+  for (const p of [`/embed/speakers/${SEED.eventSlug}`, `/embed/schedule/${SEED.eventSlug}`]) {
+    const html = (await get(p)).text;
+    const srcs = [...html.matchAll(/<img[^>]+src="([^"]+)"/g)].map((m) => m[1]);
+    for (const src of srcs) {
+      const r = await fetch(src.startsWith('http') ? src : base + src);
+      const ct = r.headers.get('content-type') ?? '';
+      if (r.status !== 200 || !ct.startsWith('image/')) broken.push(`${src} → ${r.status} ${ct}`);
+    }
+  }
+  assert(broken.length === 0, `broken embed images: ${broken.join('; ')}`);
+});
+
 await check('pin #6: embed pages are self-contained (< 30 KB, no SPA bundle reference)', async () => {
   for (const p of [`/embed/speakers/${SEED.eventSlug}`, `/embed/schedule/${SEED.eventSlug}`]) {
     const r = await get(p);
