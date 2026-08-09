@@ -39,3 +39,21 @@ screenshots. Typography may differ from the SPA; color/spacing language must tra
 
 Maintainer checks every cycle diff against all of the above before committing;
 violations get routed back through the coordinator, not silently fixed.
+
+## Cycle-3 REQUIRED items (coordinator, 2026-08-08 — priority order)
+
+Context: the round selector on the Review page defaults to CLOSED Round 1, so a
+judge's first touch of evaluation workflows is score → Save → error. The server
+is correct (400 round_closed, verified); the UI invites an action it knows fails.
+
+1. **HIGHEST VALUE PER BYTE**: default the round selector to the first OPEN
+   round; fall back to the most recent round when none are open. One line.
+   If only one thing lands, this is it.
+2. **Proper fix**: when `!round.is_open`, disable score buttons + Save and show
+   a short "This round is closed — scores are final" notice.
+3. **Copy**: the progress bar at ReviewPage.tsx:60 needs the same "by you"
+   qualifier the header at line 46 carries.
+
+SINGLE-WRITER RULE: these touch ReviewPage.tsx. If you (design agent) take them,
+say so in the cycle-3 handoff so nobody else edits that file; if you don't,
+they land separately through 07 under a scoped freeze exception.

@@ -67,6 +67,21 @@ on every surface walked.
   harness) — true phone-width rendering untested; accepted risk, restated in the GO/NO-GO.
   Form/embeds use fluid layouts, so exposure is low.
 
+## Final-gate acceptance checks (cycle-3 ReviewPage fixes — pre-specified by QA)
+
+The last gate before freeze verifies these against the deployed candidate, in the
+browser, in addition to the full standing protocol (quiesced suite, content-hash
+identity, origin scan, RO smoke, overflow probe, console reads):
+
+1. **Review progress label**: the round-header bar either reads "…% reviewed **by
+   you**" (per-user, labeled honestly) or shows round-wide coverage as a distinct
+   metric — no per-user number wearing a round-wide label anywhere on the page.
+2. **Closed-round scoring**: with a closed round selected, score buttons and Save
+   are disabled and a "round closed — scores are final" notice is visible; no path
+   to the server's 400 `round_closed` from normal UI use.
+3. **(If included) round selector default**: defaults to the first OPEN round when
+   one exists, not to a closed round.
+
 ## Remaining before GO (process, not product)
 
 1. UI pencils-down after this clean pass → candidate sequence: final destructive pass →

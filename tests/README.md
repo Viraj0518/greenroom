@@ -28,6 +28,22 @@ node tests/smoke.mjs https://greenroom-dev.pages.dev
 
 - `vitest` (^2), `typescript`, `wrangler` — test script: `vitest run -c tests/vitest.config.ts`
 
+## Browser-pass standing checks (run on every surface, every deploy audit)
+
+- **Screenshot + console-error read per route** — a fatal render (black screen) is
+  invisible to HTTP checks; the tested object must be the judged object.
+- **Horizontal-overflow probe** (added after the cycle-2 clipped-stat-tiles defect
+  shipped past two eyeballs): on each page run
+  `document.documentElement.scrollWidth > document.documentElement.clientWidth`
+  via the JS tool — `true` means page-level horizontal overflow exists (content
+  clipped off-screen at rest; the whole layout shifts on a right-scroll).
+  Deterministic, no interaction needed. Assert `false` on every org/portal/embed
+  surface at desktop width.
+- **External-origin scan** on served HTML/CSS/bundle/embeds (pin #6: no external
+  origins; also the discriminator class for dirty-build bypasses).
+- Known floor: harness cannot drive viewports below ~500px CSS width — sub-900px
+  responsive behavior stays UI-attested unless checked on a real device.
+
 ## Conventions
 
 - Every denial test has a positive control on the same route/flow, so an
