@@ -1,4 +1,41 @@
 # GreenRoom — Cloudflare Pages project config (maintainer-owned; binding names are fixed by CONTRACTS.md)
+#
+# ============================================================================
+# UNPINNED CLOUDFLARE ACCOUNT — this config does not choose a deploy target
+# ============================================================================
+# Two Cloudflare accounts are confirmed in this estate:
+#   e600be37d8a0e04150f5b15cca612420
+#   24c5b14aa2682075334c8be529c6ea9f
+# This config pins NEITHER — there is no `account_id` key anywhere in this
+# file — so `pnpm deploy` / `wrangler pages deploy` lands in whichever account
+# the operator happens to be authenticated to, with no prompt and no diff.
+#
+# UNVERIFIED best guess: a probe of e600be37d8a0e04150f5b15cca612420 did NOT
+# find `greenroom-dev` — absent from `wrangler pages project list` (which
+# returned only gounblock-ai, unblock-install, unblock-docs) and absent as a
+# Worker (`wrangler deployments list --name greenroom-dev` -> "This Worker
+# does not exist on your account. [code: 10007]"), both measured 2026-08-24.
+# So this project is *probably* in 24c5b14aa2682075334c8be529c6ea9f. Treat that
+# as UNVERIFIED: 24c5b14a is unreachable from the maintainer workstation
+# (`Authentication error [code: 10000]`), so the guess could not be confirmed
+# from either side, and a third personal account is not excluded.
+#
+# Why this is not hypothetical — the `unblock-api-gateway` precedent: a
+# same-named shadow worker exists in e600be37d8a0e04150f5b15cca612420 and took
+# 4 abandoned deployments on 2026-07-08, while the LIVE gateway serving
+# api.kaeva.app is the one in 24c5b14aa2682075334c8be529c6ea9f. A wrong-account
+# deploy therefore reports SUCCESS and changes nothing.
+#
+# Note the extra Pages-specific trap: the D1 binding below is pinned by
+# database_id (73dd90b3-...), and a database id only resolves inside its owning
+# account. Deploying `greenroom-dev` from the wrong account creates a NEW,
+# EMPTY Pages project there and cannot bind that D1 database.
+#
+# REQUIRED FOLLOW-UP: confirm which account owns this project, then pin
+# `account_id` here. DO NOT pin a guessed value — a wrong pin sends a deploy
+# confidently into the wrong account, which is strictly worse than no pin,
+# because it converts an operator-visible ambiguity into a silent success.
+# ============================================================================
 name = "greenroom-dev"
 compatibility_date = "2026-08-01"
 pages_build_output_dir = "dist"
