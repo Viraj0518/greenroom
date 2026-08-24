@@ -82,6 +82,10 @@ pnpm exec wrangler pages project create greenroom-dev
 pnpm deploy
 ```
 
+> ⚠️ `pnpm deploy` does not pin a Cloudflare account, so it deploys into whichever
+> account `wrangler login` last authenticated — see the **UNPINNED CLOUDFLARE ACCOUNT**
+> banner at the top of `wrangler.toml` before running it.
+
 Open the deployed URL, register the first account (it becomes the admin), and create your event. Optionally seed the demo dataset: `pnpm exec wrangler d1 execute greenroom-db --remote --file=db/seed.sql`.
 
 ### File storage (pick one)
